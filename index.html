@@ -414,7 +414,7 @@
 
     .nav-button {
       min-width: 0;
-      min-height: 60px;
+      min-height: 52px;
       border: 0;
       border-radius: 10px;
       color: var(--muted);
@@ -1047,15 +1047,17 @@
       right: 0;
       bottom: 0;
       z-index: 1002;
-      max-height: min(88vh, 720px);
-      max-height: min(88dvh, 720px);
-      padding: 10px 14px max(18px, env(safe-area-inset-bottom));
+      max-height: 65vh;
+      max-height: 65dvh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      padding: 10px 14px 0;
       border-radius: 18px 18px 0 0;
       background: linear-gradient(180deg, rgba(32, 39, 28, 0.98), rgba(16, 20, 16, 0.98));
       box-shadow: 0 -24px 60px rgba(0, 0, 0, 0.56);
       transform: translateY(105%);
       transition: transform 220ms ease;
-      overflow: auto;
     }
 
     .drawer.open {
@@ -1068,6 +1070,7 @@
       margin: 0 auto 13px;
       border-radius: 999px;
       background: rgba(238, 233, 220, 0.28);
+      flex-shrink: 0;
     }
 
     .drawer-title-row {
@@ -1076,6 +1079,14 @@
       justify-content: space-between;
       gap: 12px;
       margin-bottom: 16px;
+      flex-shrink: 0;
+    }
+
+    .drawer-scroll {
+      flex: 1;
+      overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
+      padding-bottom: max(18px, env(safe-area-inset-bottom));
     }
 
     .form-group {
@@ -1686,33 +1697,35 @@
       </button>
     </div>
 
-    <div class="form-group">
-      <label class="label">Type of Discovery</label>
-      <div id="markerGrid" class="marker-grid"></div>
-    </div>
-
-    <div class="form-group">
-      <label class="label" for="noteInput">Notes</label>
-      <textarea id="noteInput" placeholder="Describe tracks, movement, weather, direction, behaviour..."></textarea>
-    </div>
-
-    <div class="form-group">
-      <input id="photoInput" class="photo-input" type="file" accept="image/*" capture="environment">
-      <button id="photoBtn" class="photo-button" type="button">
-        <svg viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path><circle cx="12" cy="13" r="4"></circle></svg>
-        Add Photo
-      </button>
-      <div id="photoPreview" class="photo-preview">
-        <img id="photoPreviewImage" alt="Selected photo preview">
-        <span id="photoPreviewText">Photo ready to save with this find.</span>
+    <div class="drawer-scroll">
+      <div class="form-group">
+        <label class="label">Type of Discovery</label>
+        <div id="markerGrid" class="marker-grid"></div>
       </div>
-    </div>
 
-    <p id="coordText" class="coords"></p>
+      <div class="form-group">
+        <label class="label" for="noteInput">Notes</label>
+        <textarea id="noteInput" placeholder="Describe tracks, movement, weather, direction, behaviour..."></textarea>
+      </div>
 
-    <div class="button-row">
-      <button id="cancelBtn" class="secondary-button" type="button">Cancel</button>
-      <button id="saveBtn" class="primary-button" type="button">Save Marker</button>
+      <div class="form-group">
+        <input id="photoInput" class="photo-input" type="file" accept="image/*" capture="environment">
+        <button id="photoBtn" class="photo-button" type="button">
+          <svg viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path><circle cx="12" cy="13" r="4"></circle></svg>
+          Add Photo
+        </button>
+        <div id="photoPreview" class="photo-preview">
+          <img id="photoPreviewImage" alt="Selected photo preview">
+          <span id="photoPreviewText">Photo ready to save with this find.</span>
+        </div>
+      </div>
+
+      <p id="coordText" class="coords"></p>
+
+      <div class="button-row">
+        <button id="cancelBtn" class="secondary-button" type="button">Cancel</button>
+        <button id="saveBtn" class="primary-button" type="button">Save Marker</button>
+      </div>
     </div>
   </section>
 
