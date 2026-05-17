@@ -3601,7 +3601,7 @@
     }
 
     function showAuthScreen(message = "") {
-      console.log("[Auth] showAuthScreen — caller:", new Error().stack?.split("\n")[2]?.trim());
+      console.log("[Auth] showAuthScreen — message:", JSON.stringify(message), "| caller:", new Error().stack?.split("\n")[2]?.trim());
       els.authScreen.classList.add("open");
       document.body.classList.add("auth-open");
       els.authMessage.textContent = message;
@@ -4401,30 +4401,47 @@
         await TrailItAuth.initialize(async nextUser => {
           console.log("[Auth] auth callback — nextUser.id:", nextUser?.id ?? "null");
           state.authUser = nextUser;
-          renderAuthState();
-          if (nextUser) await finishAppStart();
+          if (nextUser) {
+            // Hide auth screen directly — do not route through renderAuthState(),
+            // which reads getCurrentUser() and has conditional branches that can
+            // race with other callbacks.
+            hideAuthScreen();
+            els.logoutBtn.classList.add("visible");
+            if (!state.appStarted) {
+              try {
+                await finishAppStart();
+              } catch (e) {
+                // Data init error after valid auth — do not re-show login card.
+                console.error("[Auth] finishAppStart error (auth callback):", e);
+              }
+            }
+          }
         });
 
         console.log("[Auth] initialize returned — appStarted:", state.appStarted, "| currentUser.id:", TrailItAuth.getCurrentUser()?.id ?? "null");
 
-        // After initialize resolves, check session state directly and act on it.
-        // This handles the case where the auth callback ran async and appStarted is already true,
-        // or where getSession resolved a user that the callback missed.
         const user = TrailItAuth.getCurrentUser();
+        console.log("[Auth] post-init user.id:", user?.id ?? "null");
         if (user) {
-          // Valid session — ensure auth screen is hidden and app is started.
+          // Belt-and-suspenders: hide screen directly whether callback already ran or not.
           hideAuthScreen();
+          els.logoutBtn.classList.add("visible");
           if (!state.appStarted) {
             state.authUser = user;
-            await finishAppStart();
+            try {
+              await finishAppStart();
+            } catch (e) {
+              // Data init error after valid auth — do not re-show login card.
+              console.error("[Auth] finishAppStart error (post-init):", e);
+            }
           }
-        } else if (!state.appStarted) {
-          // No session and callback didn't start the app — show login.
-          renderAuthState();
         }
+        // No user: auth screen is already open from the gate above.
+        // onAuthStateChange SIGNED_IN will call the callback when exchange completes.
       } catch (error) {
+        // Only reaches here if TrailItAuth.initialize() itself throws (e.g. getSession network error).
         console.error("[Auth] initialize error:", error);
-        showAuthScreen(error.message || "Could not load Supabase session.");
+        showAuthScreen(error.message || "Could not connect to Supabase.");
       }
     }
 
