@@ -87,8 +87,7 @@
       auth: {
         autoRefreshToken: true,
         persistSession: true,
-        detectSessionInUrl: true,
-        flowType: "implicit"
+        detectSessionInUrl: true
       }
     });
   }

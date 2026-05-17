@@ -3194,14 +3194,10 @@
 
           // Register before getSession so INITIAL_SESSION from an OAuth redirect isn't missed.
           const { data: listener } = SUPABASE_CLIENT.auth.onAuthStateChange((event, session) => {
-            console.log("[TrailIt Auth] onAuthStateChange", {
-              event,
-              sessionUserId: session?.user?.id ?? null,
-              currentUserBefore: currentUser?.id ?? null
-            });
+            console.log("[Auth] event:", event, "| session.user.id:", session?.user?.id ?? "null", "| currentUser.id:", currentUser?.id ?? "null");
             // Never overwrite an established user with null except on an explicit sign-out.
             if (!session?.user && currentUser && event !== "SIGNED_OUT") {
-              console.log("[TrailIt Auth] skipping null — user already established");
+              console.log("[Auth] skipping — user already established, event is not SIGNED_OUT");
               return;
             }
             const user = setCurrentUser(session?.user || null);
@@ -3211,13 +3207,10 @@
 
           const { data, error } = await SUPABASE_CLIENT.auth.getSession();
           if (error) throw error;
-          console.log("[TrailIt Auth] getSession result", {
-            sessionUserId: data.session?.user?.id ?? null,
-            currentUserAfterStateChange: currentUser?.id ?? null
-          });
+          console.log("[Auth] getSession: session.user.id:", data.session?.user?.id ?? "null", "| currentUser.id:", currentUser?.id ?? "null");
           // Only write if the auth state change hasn't already resolved a user from the URL.
           if (!currentUser) setCurrentUser(data.session?.user || null);
-          console.log("[TrailIt Auth] initialize complete — currentUser:", currentUser?.id ?? null);
+          console.log("[Auth] initialize done — currentUser.id:", currentUser?.id ?? "null");
           return currentUser;
         },
         async signIn(email, password) {
@@ -3608,7 +3601,7 @@
     }
 
     function showAuthScreen(message = "") {
-      console.log("[TrailIt Auth] showAuthScreen", { message, stack: new Error().stack?.split("\n")[2]?.trim() });
+      console.log("[Auth] showAuthScreen — caller:", new Error().stack?.split("\n")[2]?.trim());
       els.authScreen.classList.add("open");
       document.body.classList.add("auth-open");
       els.authMessage.textContent = message;
@@ -3619,7 +3612,7 @@
     }
 
     function hideAuthScreen() {
-      console.log("[TrailIt Auth] hideAuthScreen", { stack: new Error().stack?.split("\n")[2]?.trim() });
+      console.log("[Auth] hideAuthScreen — caller:", new Error().stack?.split("\n")[2]?.trim());
       els.authScreen.classList.remove("open");
       document.body.classList.remove("auth-open");
       els.authMessage.textContent = "";
@@ -3627,11 +3620,8 @@
 
     function renderAuthState() {
       state.authUser = TrailItAuth.getCurrentUser();
-      console.log("[TrailIt Auth] renderAuthState", {
-        isSupabaseMode: TrailItAuth.isSupabaseMode,
-        currentUserId: state.authUser?.id ?? null,
-        appStarted: state.appStarted
-      });
+      const screenOpen = els.authScreen.classList.contains("open");
+      console.log("[Auth] renderAuthState — currentUser.id:", state.authUser?.id ?? "null", "| authScreen.open:", screenOpen, "| appStarted:", state.appStarted);
       if (!TrailItAuth.isSupabaseMode) {
         hideAuthScreen();
         els.logoutBtn.classList.remove("visible");
@@ -4389,19 +4379,16 @@
     }
 
     async function initializeApp() {
-      console.log("[TrailIt Auth] initializeApp", {
-        href: window.location.href,
-        hash: window.location.hash.slice(0, 80) || "(none)",
-        search: window.location.search.slice(0, 80) || "(none)",
-        dataMode: TRAILIT_DATA_MODE,
-        isSupabaseMode: TrailItAuth.isSupabaseMode
-      });
+      console.log("[Auth] initializeApp — dataMode:", TRAILIT_DATA_MODE, "| isSupabaseMode:", TrailItAuth.isSupabaseMode);
+      console.log("[Auth] URL — href:", window.location.href);
+      console.log("[Auth] URL — hash:", window.location.hash.slice(0, 120) || "(none)");
+      console.log("[Auth] URL — search:", window.location.search.slice(0, 120) || "(none)");
 
       setAuthMode("login");
       renderDataModeSwitcher();
 
       if (!TrailItAuth.isSupabaseMode) {
-        console.log("[TrailIt Auth] mock mode — skipping auth");
+        console.log("[Auth] mock mode — skipping auth gate");
         await finishAppStart();
         return;
       }
@@ -4412,23 +4399,31 @@
 
       try {
         await TrailItAuth.initialize(async nextUser => {
-          console.log("[TrailIt Auth] auth callback fired", { nextUserId: nextUser?.id ?? null });
+          console.log("[Auth] auth callback — nextUser.id:", nextUser?.id ?? "null");
           state.authUser = nextUser;
           renderAuthState();
           if (nextUser) await finishAppStart();
         });
-        console.log("[TrailIt Auth] initialize returned — appStarted:", state.appStarted);
-        // Only render auth state and start the app if the auth callback hasn't already
-        // done so. Avoids a second renderAuthState() call overwriting a valid session.
-        if (!state.appStarted) {
-          const user = TrailItAuth.getCurrentUser();
-          console.log("[TrailIt Auth] fallback render — currentUser:", user?.id ?? null);
-          state.authUser = user;
+
+        console.log("[Auth] initialize returned — appStarted:", state.appStarted, "| currentUser.id:", TrailItAuth.getCurrentUser()?.id ?? "null");
+
+        // After initialize resolves, check session state directly and act on it.
+        // This handles the case where the auth callback ran async and appStarted is already true,
+        // or where getSession resolved a user that the callback missed.
+        const user = TrailItAuth.getCurrentUser();
+        if (user) {
+          // Valid session — ensure auth screen is hidden and app is started.
+          hideAuthScreen();
+          if (!state.appStarted) {
+            state.authUser = user;
+            await finishAppStart();
+          }
+        } else if (!state.appStarted) {
+          // No session and callback didn't start the app — show login.
           renderAuthState();
-          if (user) await finishAppStart();
         }
       } catch (error) {
-        console.error("[TrailIt Auth] initialize error", error);
+        console.error("[Auth] initialize error:", error);
         showAuthScreen(error.message || "Could not load Supabase session.");
       }
     }
