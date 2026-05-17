@@ -3192,7 +3192,7 @@
           if (!isSupabaseMode) return setCurrentUser(null);
           if (!SUPABASE_CLIENT) return setCurrentUser(null);
 
-          // Register before getSession so INITIAL_SESSION from an OAuth redirect isn't missed.
+          // Register before any session recovery so SIGNED_IN from URL processing is caught.
           const { data: listener } = SUPABASE_CLIENT.auth.onAuthStateChange((event, session) => {
             console.log("[Auth] event:", event, "| session.user.id:", session?.user?.id ?? "null", "| currentUser.id:", currentUser?.id ?? "null");
             // Never overwrite an established user with null except on an explicit sign-out.
@@ -3204,6 +3204,43 @@
             if (onAuthChange) onAuthChange(user);
           });
           authSubscription = listener?.subscription || null;
+
+          // Log what localStorage has so we can see if a Supabase session was persisted.
+          try {
+            const sbKeys = Object.keys(localStorage).filter(k => k.includes("supabase"));
+            console.log("[Auth] localStorage supabase keys:", sbKeys);
+            const tokenKey = sbKeys.find(k => k.includes("auth-token") && !k.includes("code-verifier"));
+            if (tokenKey) {
+              const raw = JSON.parse(localStorage.getItem(tokenKey) || "null");
+              console.log("[Auth] stored session — user:", raw?.user?.id ?? "null", "| expires:", raw?.expires_at ? new Date(raw.expires_at * 1000).toISOString() : "n/a");
+            } else {
+              console.log("[Auth] no stored auth-token in localStorage");
+            }
+          } catch (lsErr) {
+            console.warn("[Auth] localStorage read error:", lsErr);
+          }
+
+          // Explicitly drive OAuth callback URL processing.
+          // detectSessionInUrl processes the URL asynchronously during client init,
+          // which creates a timing gap where getSession() returns null.
+          // By handling both URL forms explicitly here (after listener is registered),
+          // SIGNED_IN fires through the listener before getSession() is awaited.
+          const hashParams = new URLSearchParams(window.location.hash.slice(1));
+          const searchParams = new URLSearchParams(window.location.search);
+          const accessToken = hashParams.get("access_token");
+          const refreshToken = hashParams.get("refresh_token");
+          const oauthCode = searchParams.get("code");
+          console.log("[Auth] URL check — access_token:", accessToken ? "present" : "none", "| refresh_token:", refreshToken ? "present" : "none", "| code:", oauthCode ? "present" : "none");
+
+          if (accessToken && refreshToken && !currentUser) {
+            console.log("[Auth] Setting session from URL hash tokens...");
+            const { error: setErr } = await SUPABASE_CLIENT.auth.setSession({ access_token: accessToken, refresh_token: refreshToken });
+            if (setErr) console.warn("[Auth] setSession error:", setErr.message);
+          } else if (oauthCode && !currentUser) {
+            console.log("[Auth] Exchanging OAuth code for session...");
+            const { data: exData, error: exErr } = await SUPABASE_CLIENT.auth.exchangeCodeForSession(oauthCode);
+            console.log("[Auth] exchangeCodeForSession — user:", exData?.session?.user?.id ?? "null", "| error:", exErr?.message ?? "none");
+          }
 
           const { data, error } = await SUPABASE_CLIENT.auth.getSession();
           if (error) throw error;
