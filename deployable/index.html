@@ -1,0 +1,4416 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="trailit:data-mode" content="mock">
+  <meta name="trailit:supabase-url" content="">
+  <meta name="trailit:supabase-publishable-key" content="">
+  <meta name="trailit:supabase-photo-bucket" content="trail-photos">
+  <title>Trail it</title>
+  <link rel="icon" href="/favicon.png" type="image/png">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+  <style>
+    :root {
+      --charcoal: #101410;
+      --charcoal-2: #171d16;
+      --panel: rgba(24, 30, 22, 0.94);
+      --panel-soft: rgba(32, 39, 28, 0.88);
+      --moss: #7f9f5d;
+      --fern: #4f6f3f;
+      --lichen: #c4d4a2;
+      --bark: #765b39;
+      --clay: #b37a49;
+      --cream: #eee9dc;
+      --muted: #a9ad9e;
+      --danger: #d98b6b;
+      --line: rgba(238, 233, 220, 0.16);
+      --line-strong: rgba(238, 233, 220, 0.28);
+      --shadow: 0 18px 50px rgba(0, 0, 0, 0.45);
+      --shadow-soft: 0 10px 28px rgba(0, 0, 0, 0.32);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html,
+    body {
+      width: 100%;
+      height: 100%;
+      margin: 0;
+      overflow: hidden;
+      overscroll-behavior: none;
+      background: var(--charcoal);
+      color: var(--cream);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    button,
+    input,
+    textarea {
+      font: inherit;
+    }
+
+    button {
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    button,
+    select,
+    input,
+    textarea {
+      transition: background-color 160ms ease, border-color 160ms ease, color 160ms ease, box-shadow 160ms ease, transform 120ms ease, opacity 160ms ease;
+    }
+
+    button:active:not(:disabled) {
+      transform: scale(0.98);
+    }
+
+    button:focus-visible,
+    select:focus-visible,
+    input:focus-visible,
+    textarea:focus-visible {
+      outline: 2px solid rgba(196, 212, 162, 0.76);
+      outline-offset: 2px;
+    }
+
+    button:disabled,
+    input:disabled,
+    textarea:disabled,
+    select:disabled {
+      cursor: not-allowed;
+      opacity: 0.48;
+      filter: saturate(0.78);
+    }
+
+    #map {
+      position: fixed;
+      inset: 0;
+      width: 100%;
+      height: 100vh;
+      height: 100dvh;
+      z-index: 1;
+      background: #0d120d;
+    }
+
+    .leaflet-container {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      position: relative;
+    }
+
+    .leaflet-pane,
+    .leaflet-tile,
+    .leaflet-marker-icon,
+    .leaflet-marker-shadow,
+    .leaflet-tile-container,
+    .leaflet-pane > svg,
+    .leaflet-pane > canvas,
+    .leaflet-zoom-box,
+    .leaflet-image-layer,
+    .leaflet-layer {
+      position: absolute;
+      left: 0;
+      top: 0;
+    }
+
+    .leaflet-tile {
+      width: 256px;
+      height: 256px;
+      user-select: none;
+      -webkit-user-drag: none;
+    }
+
+    .leaflet-map-pane {
+      z-index: 400;
+    }
+
+    .leaflet-tile-pane {
+      z-index: 200;
+    }
+
+    .leaflet-overlay-pane {
+      z-index: 400;
+    }
+
+    .leaflet-marker-pane {
+      z-index: 600;
+    }
+
+    .leaflet-tooltip-pane {
+      z-index: 650;
+    }
+
+    .leaflet-popup-pane {
+      z-index: 700;
+    }
+
+    .leaflet-control-attribution {
+      background: rgba(16, 20, 16, 0.78) !important;
+      color: var(--cream) !important;
+    }
+
+    .leaflet-control-zoom {
+      border: 0 !important;
+      box-shadow: var(--shadow) !important;
+    }
+
+    .leaflet-control-zoom a {
+      width: 44px !important;
+      height: 44px !important;
+      line-height: 42px !important;
+      background: var(--panel) !important;
+      color: var(--cream) !important;
+      border-color: var(--line) !important;
+    }
+
+    .leaflet-bottom.leaflet-right {
+      bottom: calc(92px + env(safe-area-inset-bottom));
+    }
+
+    .app-shell {
+      position: absolute;
+      inset: 0;
+      z-index: 1000;
+      pointer-events: none;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      padding: max(12px, env(safe-area-inset-top)) 12px max(12px, env(safe-area-inset-bottom));
+    }
+
+    .top-bar,
+    .bottom-bar,
+    .recent-panel,
+    .drawer {
+      pointer-events: auto;
+    }
+
+    .top-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      min-width: 0;
+      max-width: 100%;
+    }
+
+    .brand {
+      flex: 1 1 auto;
+      min-width: 0;
+      max-width: min(54vw, 360px);
+      padding: 10px 13px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: linear-gradient(135deg, rgba(23, 29, 22, 0.96), rgba(34, 42, 29, 0.9));
+      box-shadow: var(--shadow-soft);
+      backdrop-filter: blur(18px);
+    }
+
+    .brand h1 {
+      margin: 0;
+      font-size: 20px;
+      line-height: 1;
+      letter-spacing: 0;
+    }
+
+    .brand span {
+      display: block;
+      margin-top: 5px;
+      color: var(--muted);
+      font-size: 12px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .icon-button,
+    .primary-button,
+    .secondary-button,
+    .danger-button {
+      min-height: 48px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      color: var(--cream);
+      background: var(--panel);
+      box-shadow: var(--shadow);
+      cursor: pointer;
+      touch-action: manipulation;
+    }
+
+    .icon-button {
+      width: 50px;
+      display: grid;
+      place-items: center;
+      flex: 0 0 auto;
+    }
+
+    .icon-button svg {
+      width: 22px;
+      height: 22px;
+      stroke: currentColor;
+    }
+
+    .recenter-button {
+      position: absolute;
+      top: max(12px, env(safe-area-inset-top));
+      right: max(12px, env(safe-area-inset-right));
+      width: 54px;
+      height: 54px;
+      min-height: 54px;
+      border: 1px solid var(--line);
+      border-radius: 50%;
+      background: rgba(19, 24, 18, 0.94);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+      color: var(--lichen);
+      font-size: 0;
+      line-height: 1;
+      box-shadow: var(--shadow);
+      pointer-events: auto;
+      backdrop-filter: blur(18px);
+    }
+
+    .recenter-button svg {
+      width: 24px;
+      height: 24px;
+      stroke: currentColor;
+    }
+
+    .trail-action-button {
+      position: absolute;
+      top: max(12px, env(safe-area-inset-top));
+      right: calc(max(12px, env(safe-area-inset-right)) + 64px);
+      min-height: 54px;
+      padding: 0 14px;
+      border: 1px solid rgba(127, 159, 93, 0.28);
+      border-radius: 999px;
+      background: rgba(38, 64, 34, 0.94);
+      color: var(--lichen);
+      font-size: 13px;
+      font-weight: 900;
+      box-shadow: var(--shadow);
+      pointer-events: auto;
+      backdrop-filter: blur(18px);
+    }
+
+    .recenter-button:hover:not(:disabled),
+    .trail-action-button:hover:not(:disabled),
+    .trail-log-button:hover:not(:disabled),
+    .user-switcher:hover:not(:disabled),
+    .primary-button:hover:not(:disabled),
+    .secondary-button:hover:not(:disabled),
+    .danger-button:hover:not(:disabled),
+    .photo-button:hover:not(:disabled) {
+      border-color: var(--line-strong);
+      box-shadow: 0 16px 38px rgba(0, 0, 0, 0.42);
+    }
+
+    .trail-action-button.recording {
+      border-color: rgba(217, 139, 107, 0.38);
+      background: rgba(92, 42, 28, 0.94);
+      color: #ffd7c8;
+    }
+
+    .status-pill {
+      position: absolute;
+      top: calc(max(12px, env(safe-area-inset-top)) + 70px);
+      left: 12px;
+      right: 12px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      min-height: 38px;
+      padding: 9px 12px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: rgba(16, 20, 16, 0.82);
+      color: var(--muted);
+      font-size: 13px;
+      backdrop-filter: blur(16px);
+      opacity: 0;
+      transform: translateY(-8px);
+      transition: opacity 180ms ease, transform 180ms ease;
+      pointer-events: none;
+    }
+
+    .status-pill.visible {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--moss);
+      box-shadow: 0 0 0 4px rgba(127, 159, 93, 0.18);
+    }
+
+    .map-hint {
+      align-self: center;
+      max-width: min(92vw, 420px);
+      margin-bottom: calc(96px + env(safe-area-inset-bottom));
+      padding: 10px 12px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: rgba(16, 20, 16, 0.78);
+      color: var(--muted);
+      font-size: 13px;
+      text-align: center;
+      backdrop-filter: blur(14px);
+    }
+
+    .trail-live-card {
+      position: absolute;
+      left: 12px;
+      right: 12px;
+      bottom: calc(max(14px, env(safe-area-inset-bottom)) + 96px);
+      z-index: 1000;
+      display: none;
+      gap: 8px;
+      padding: 10px;
+      border: 1px solid rgba(127, 159, 93, 0.3);
+      border-radius: 12px;
+      background: linear-gradient(180deg, rgba(32, 39, 28, 0.96), rgba(16, 20, 16, 0.96));
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(18px);
+      pointer-events: auto;
+    }
+
+    .trail-live-card.visible {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+
+    .trail-live-card .stat {
+      padding: 8px;
+    }
+
+    .trail-live-card strong {
+      font-size: 16px;
+    }
+
+    .bottom-bar {
+      position: absolute;
+      left: 12px;
+      right: 12px;
+      bottom: max(14px, env(safe-area-inset-bottom));
+      z-index: 1000;
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 8px;
+      padding: 8px;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: linear-gradient(180deg, rgba(32, 39, 28, 0.96), rgba(16, 20, 16, 0.96));
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(18px);
+    }
+
+    .nav-button {
+      min-width: 0;
+      min-height: 60px;
+      border: 0;
+      border-radius: 10px;
+      color: var(--muted);
+      background: transparent;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 4px;
+      cursor: pointer;
+    }
+
+    .nav-button:hover:not(:disabled) {
+      background: rgba(238, 233, 220, 0.07);
+      color: var(--cream);
+    }
+
+    .nav-button svg {
+      width: 22px;
+      height: 22px;
+      stroke: currentColor;
+    }
+
+    .nav-button span {
+      font-size: 12px;
+      font-weight: 800;
+      white-space: nowrap;
+    }
+
+    .nav-button.active {
+      background: rgba(127, 159, 93, 0.24);
+      color: var(--lichen);
+      box-shadow: inset 0 0 0 1px rgba(196, 212, 162, 0.16);
+    }
+
+    .recent-panel,
+    .trails-panel {
+      position: absolute;
+      left: 12px;
+      right: 12px;
+      bottom: calc(max(14px, env(safe-area-inset-bottom)) + 86px);
+      z-index: 1000;
+      max-height: min(54vh, 430px);
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: linear-gradient(180deg, rgba(32, 39, 28, 0.98), rgba(16, 20, 16, 0.98));
+      box-shadow: var(--shadow);
+      overflow: hidden;
+      transform: translateY(22px);
+      opacity: 0;
+      visibility: hidden;
+      transition: transform 180ms ease, opacity 180ms ease, visibility 180ms ease;
+      backdrop-filter: blur(20px);
+    }
+
+    .recent-panel.open,
+    .trails-panel.open {
+      transform: translateY(0);
+      opacity: 1;
+      visibility: visible;
+    }
+
+    .panel-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      padding: 14px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 8px;
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--line);
+      background: rgba(6, 8, 6, 0.18);
+    }
+
+    .stat {
+      min-width: 0;
+      padding: 10px 8px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: rgba(238, 233, 220, 0.05);
+    }
+
+    .stat strong {
+      display: block;
+      font-size: 18px;
+      line-height: 1;
+      color: var(--lichen);
+    }
+
+    .stat span {
+      display: block;
+      margin-top: 5px;
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+    }
+
+    .panel-header h2,
+    .drawer h2 {
+      margin: 0;
+      font-size: 18px;
+      letter-spacing: 0;
+    }
+
+    .count-chip {
+      padding: 5px 9px;
+      border-radius: 999px;
+      background: rgba(127, 159, 93, 0.22);
+      border: 1px solid rgba(196, 212, 162, 0.16);
+      color: var(--lichen);
+      font-size: 12px;
+      font-weight: 800;
+      white-space: nowrap;
+    }
+
+    .recent-list,
+    .trail-list {
+      max-height: calc(min(54vh, 430px) - 124px);
+      overflow: auto;
+      padding: 8px;
+    }
+
+    .empty-state {
+      padding: 22px 14px;
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 1.4;
+      text-align: center;
+    }
+
+    .find-row,
+    .trail-row {
+      width: 100%;
+      border: 0;
+      border-radius: 8px;
+      padding: 12px;
+      color: var(--cream);
+      background: transparent;
+      display: grid;
+      grid-template-columns: 42px 1fr auto;
+      gap: 10px;
+      text-align: left;
+      align-items: center;
+      cursor: pointer;
+    }
+
+    .find-row:active,
+    .find-row:hover,
+    .trail-row:active,
+    .trail-row:hover {
+      background: rgba(238, 233, 220, 0.08);
+    }
+
+    .trail-row {
+      grid-template-columns: 1fr auto;
+    }
+
+    .trail-row span {
+      min-width: 0;
+    }
+
+    .find-icon {
+      width: 42px;
+      height: 42px;
+      border-radius: 8px;
+      display: grid;
+      place-items: center;
+      background: rgba(238, 233, 220, 0.08);
+      border: 1px solid var(--line);
+    }
+
+    .find-icon svg {
+      width: 25px;
+      height: 25px;
+    }
+
+    .find-row strong,
+    .trail-row strong {
+      display: block;
+      font-size: 15px;
+    }
+
+    .find-row small,
+    .trail-row small {
+      display: block;
+      margin-top: 4px;
+      color: var(--muted);
+      font-size: 12px;
+      overflow: hidden;
+      white-space: nowrap;
+      text-overflow: ellipsis;
+      max-width: min(48vw, 260px);
+    }
+
+    .find-row time,
+    .trail-row time {
+      color: var(--muted);
+      font-size: 12px;
+      white-space: nowrap;
+    }
+
+    .save-trail-modal {
+      position: absolute;
+      inset: 0;
+      z-index: 1003;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 18px;
+      background: rgba(4, 6, 4, 0.58);
+      backdrop-filter: blur(10px);
+    }
+
+    .save-trail-modal.open {
+      display: flex;
+    }
+
+    .save-trail-card {
+      width: min(100%, 380px);
+      padding: 16px;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: linear-gradient(180deg, rgba(32, 39, 28, 0.98), rgba(16, 20, 16, 0.98));
+      box-shadow: var(--shadow);
+    }
+
+    .save-trail-card h2 {
+      margin: 0 0 14px;
+      font-size: 18px;
+    }
+
+    .save-trail-card input {
+      width: 100%;
+      min-height: 48px;
+      margin-top: 7px;
+      padding: 11px 12px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: rgba(238, 233, 220, 0.06);
+      color: var(--cream);
+      outline: none;
+    }
+
+    .save-trail-card label {
+      display: block;
+      color: var(--muted);
+      font-size: 13px;
+      font-weight: 800;
+    }
+
+    .save-trail-stats {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 8px;
+      margin: 14px 0;
+    }
+
+    .trail-log-screen {
+      position: absolute;
+      inset: 0;
+      z-index: 2000;
+      display: none;
+      padding: max(18px, env(safe-area-inset-top)) 14px max(18px, env(safe-area-inset-bottom));
+      overflow: auto;
+      background: radial-gradient(circle at top left, rgba(127, 159, 93, 0.16), transparent 34%), linear-gradient(180deg, rgba(16, 20, 16, 0.99), rgba(24, 30, 22, 0.99));
+    }
+
+    .trail-log-screen.open {
+      display: block;
+    }
+
+    .trail-log-shell {
+      width: min(100%, 680px);
+      margin: 0 auto;
+      display: grid;
+      gap: 18px;
+    }
+
+    .trail-log-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 16px;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: linear-gradient(135deg, rgba(32, 39, 28, 0.96), rgba(16, 20, 16, 0.92));
+      box-shadow: var(--shadow-soft);
+    }
+
+    .trail-log-header h2 {
+      margin: 0;
+      font-size: 28px;
+      line-height: 1;
+    }
+
+    .trail-log-list {
+      display: grid;
+      gap: 10px;
+    }
+
+    .trail-log-row {
+      width: 100%;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 15px;
+      color: var(--cream);
+      background: rgba(238, 233, 220, 0.06);
+      text-align: left;
+      cursor: pointer;
+      box-shadow: var(--shadow-soft);
+    }
+
+    .trail-log-row:hover {
+      border-color: var(--line-strong);
+      background: rgba(238, 233, 220, 0.09);
+    }
+
+    .trail-log-row strong,
+    .trail-log-row time {
+      display: block;
+    }
+
+    .trail-log-row time {
+      margin-top: 6px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .auth-screen {
+      position: absolute;
+      inset: 0;
+      z-index: 2500;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: max(18px, env(safe-area-inset-top)) 14px max(18px, env(safe-area-inset-bottom));
+      background: linear-gradient(180deg, rgba(16, 20, 16, 0.98), rgba(24, 30, 22, 0.98));
+    }
+
+    .auth-screen.open {
+      display: flex;
+    }
+
+    .auth-card {
+      width: min(100%, 420px);
+      display: grid;
+      gap: 14px;
+      padding: 18px;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: rgba(32, 39, 28, 0.96);
+      box-shadow: var(--shadow);
+    }
+
+    .auth-card h2,
+    .auth-card p {
+      margin: 0;
+    }
+
+    .auth-tabs {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px;
+    }
+
+    .auth-tab.active {
+      border-color: rgba(196, 212, 162, 0.5);
+      background: rgba(196, 212, 162, 0.16);
+      color: var(--cream);
+    }
+
+    .auth-form {
+      display: grid;
+      gap: 10px;
+    }
+
+    .auth-form label {
+      display: grid;
+      gap: 6px;
+      color: var(--muted);
+      font-size: 13px;
+      font-weight: 800;
+    }
+
+    .auth-form input {
+      width: 100%;
+      min-height: 48px;
+      padding: 11px 12px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: rgba(16, 20, 16, 0.78);
+      color: var(--cream);
+    }
+
+    .auth-message {
+      min-height: 20px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .trail-log-form {
+      display: grid;
+      gap: 10px;
+      padding: 16px;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: rgba(238, 233, 220, 0.055);
+    }
+
+    .trail-log-form input {
+      min-height: 48px;
+      padding: 11px 12px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: rgba(16, 20, 16, 0.78);
+      color: var(--cream);
+      outline: none;
+    }
+
+    .trail-log-button {
+      min-height: 46px;
+      padding: 0 12px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+      color: var(--cream);
+      box-shadow: var(--shadow);
+      cursor: pointer;
+      pointer-events: auto;
+      font-weight: 800;
+      flex: 0 0 auto;
+    }
+
+    .members-panel {
+      display: grid;
+      gap: 10px;
+      padding: 16px;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: rgba(238, 233, 220, 0.045);
+    }
+
+    .members-panel h3 {
+      margin: 0;
+      font-size: 16px;
+    }
+
+    .member-row {
+      display: grid;
+      gap: 8px;
+      padding: 12px;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: rgba(16, 20, 16, 0.34);
+    }
+
+    .member-row.current-user {
+      border-color: rgba(196, 212, 162, 0.46);
+      background: rgba(127, 159, 93, 0.12);
+      box-shadow: inset 3px 0 0 rgba(196, 212, 162, 0.82);
+    }
+
+    .member-title {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+    }
+
+    .member-name {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      min-width: 0;
+      font-weight: 900;
+    }
+
+    .member-dot {
+      width: 14px;
+      height: 14px;
+      border-radius: 999px;
+      flex: 0 0 auto;
+      background: var(--moss);
+      box-shadow: 0 0 0 3px rgba(238, 233, 220, 0.1);
+    }
+
+    .permission-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px;
+    }
+
+    .permission-grid label {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      color: var(--muted);
+      font-size: 12px;
+      min-height: 32px;
+    }
+
+    .invite-row {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+
+    .invite-row select {
+      min-width: 0;
+      flex: 1;
+      min-height: 48px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: rgba(16, 20, 16, 0.78);
+      color: var(--cream);
+      padding: 0 9px;
+    }
+
+    .user-switcher,
+    .logout-button,
+    .data-mode-switcher {
+      min-height: 46px;
+      max-width: 120px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+      color: var(--cream);
+      padding: 0 9px;
+      box-shadow: var(--shadow);
+      pointer-events: auto;
+      flex: 0 0 auto;
+    }
+
+    .data-mode-switcher {
+      display: none;
+      max-width: 138px;
+      border-color: rgba(196, 212, 162, 0.34);
+    }
+
+    .data-mode-switcher.visible {
+      display: block;
+    }
+
+    .logout-button {
+      display: none;
+      max-width: none;
+    }
+
+    .logout-button.visible {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .drawer-scrim {
+      position: absolute;
+      inset: 0;
+      z-index: 1001;
+      background: rgba(4, 6, 4, 0.42);
+      opacity: 0;
+      visibility: hidden;
+      transition: opacity 180ms ease, visibility 180ms ease;
+    }
+
+    .drawer-scrim.open {
+      opacity: 1;
+      visibility: visible;
+    }
+
+    .drawer {
+      position: absolute;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      z-index: 1002;
+      max-height: min(88vh, 720px);
+      max-height: min(88dvh, 720px);
+      padding: 10px 14px max(18px, env(safe-area-inset-bottom));
+      border-radius: 18px 18px 0 0;
+      background: linear-gradient(180deg, rgba(32, 39, 28, 0.98), rgba(16, 20, 16, 0.98));
+      box-shadow: 0 -24px 60px rgba(0, 0, 0, 0.56);
+      transform: translateY(105%);
+      transition: transform 220ms ease;
+      overflow: auto;
+    }
+
+    .drawer.open {
+      transform: translateY(0);
+    }
+
+    .drawer-handle {
+      width: 46px;
+      height: 5px;
+      margin: 0 auto 13px;
+      border-radius: 999px;
+      background: rgba(238, 233, 220, 0.28);
+    }
+
+    .drawer-title-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+
+    .form-group {
+      margin-bottom: 16px;
+    }
+
+    .label {
+      display: block;
+      margin-bottom: 8px;
+      color: var(--muted);
+      font-size: 13px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+
+    .marker-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 8px;
+    }
+
+    .marker-option {
+      min-height: 86px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      color: var(--cream);
+      background: rgba(238, 233, 220, 0.055);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 7px;
+      cursor: pointer;
+    }
+
+    .marker-option svg {
+      width: 28px;
+      height: 28px;
+    }
+
+    .marker-option span {
+      font-size: 12px;
+      font-weight: 700;
+      text-align: center;
+    }
+
+    .marker-option.selected {
+      border-color: rgba(196, 212, 162, 0.72);
+      background: rgba(127, 159, 93, 0.22);
+      color: var(--lichen);
+      box-shadow: inset 0 0 0 1px rgba(196, 212, 162, 0.28);
+    }
+
+    textarea {
+      width: 100%;
+      min-height: 96px;
+      resize: vertical;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 12px;
+      background: rgba(6, 8, 6, 0.38);
+      color: var(--cream);
+      outline: none;
+    }
+
+    textarea:focus {
+      border-color: rgba(196, 212, 162, 0.72);
+      box-shadow: 0 0 0 3px rgba(127, 159, 93, 0.18);
+    }
+
+    .photo-input {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    .photo-button {
+      width: 100%;
+      min-height: 58px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: rgba(238, 233, 220, 0.07);
+      color: var(--cream);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      font-weight: 800;
+      cursor: pointer;
+      box-shadow: var(--shadow);
+    }
+
+    .photo-button svg {
+      width: 21px;
+      height: 21px;
+      stroke: currentColor;
+    }
+
+    .photo-preview {
+      display: none;
+      align-items: center;
+      gap: 10px;
+      margin-top: 10px;
+      padding: 8px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: rgba(6, 8, 6, 0.3);
+    }
+
+    .photo-preview.visible {
+      display: flex;
+    }
+
+    .photo-preview img {
+      width: 74px;
+      height: 58px;
+      border-radius: 7px;
+      object-fit: cover;
+      border: 1px solid rgba(238, 233, 220, 0.18);
+    }
+
+    .photo-preview span {
+      min-width: 0;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.35;
+    }
+
+    .popup-photo {
+      width: 100%;
+      max-height: 140px;
+      margin: 8px 0 4px;
+      border-radius: 7px;
+      object-fit: cover;
+      display: block;
+    }
+
+    .button-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+
+    .primary-button,
+    .secondary-button,
+    .danger-button {
+      width: 100%;
+      min-height: 56px;
+      padding: 0 14px;
+      font-weight: 800;
+    }
+
+    .primary-button {
+      border-color: rgba(196, 212, 162, 0.42);
+      background: linear-gradient(180deg, #6f8f50, #476838);
+      color: #f8f6eb;
+    }
+
+    .secondary-button {
+      background: rgba(238, 233, 220, 0.07);
+      color: var(--cream);
+    }
+
+    .danger-button {
+      border-color: rgba(217, 139, 107, 0.35);
+      background: rgba(134, 65, 47, 0.25);
+      color: #ffd3c5;
+    }
+
+    .coords {
+      margin-top: -4px;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.4;
+    }
+
+    .trail-marker {
+      width: 38px;
+      height: 38px;
+      border: 2px solid rgba(238, 233, 220, 0.9);
+      border-radius: 12px 12px 12px 4px;
+      display: grid;
+      place-items: center;
+      transform: rotate(-45deg);
+      box-shadow: 0 9px 20px rgba(0, 0, 0, 0.42);
+    }
+
+    .trail-marker svg {
+      width: 22px;
+      height: 22px;
+      transform: rotate(45deg);
+      color: #fff9e9;
+      filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.25));
+    }
+
+    .user-dot {
+      width: 22px;
+      height: 22px;
+      border: 3px solid #eef4ff;
+      border-radius: 50%;
+      background: #4da3ff;
+      box-shadow: 0 0 0 9px rgba(77, 163, 255, 0.2), 0 4px 12px rgba(0, 0, 0, 0.4);
+    }
+
+    .popup-card {
+      min-width: 190px;
+      color: #1f241c;
+    }
+
+    .popup-card strong {
+      display: block;
+      margin-bottom: 4px;
+      font-size: 15px;
+    }
+
+    .popup-card p {
+      margin: 6px 0;
+      line-height: 1.35;
+    }
+
+    .popup-card small {
+      color: #5f6658;
+    }
+
+    .created-by {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      margin-top: 5px;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.3;
+    }
+
+    .popup-card .created-by {
+      color: #5f6658;
+    }
+
+    .accent-dot {
+      width: 9px;
+      height: 9px;
+      border-radius: 999px;
+      background: var(--moss);
+      flex: 0 0 auto;
+    }
+
+    .popup-card .note-credit,
+    .popup-card .photo-credit {
+      display: block;
+      margin-top: 4px;
+      color: #5f6658;
+      font-size: 11px;
+    }
+
+    .popup-delete {
+      width: 100%;
+      margin-top: 8px;
+      min-height: 36px;
+      border: 0;
+      border-radius: 6px;
+      background: #8e3e2e;
+      color: #fff;
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    @media (max-width: 380px) {
+      .brand h1 {
+        font-size: 18px;
+      }
+
+      .brand span {
+        font-size: 11px;
+      }
+
+      .marker-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      .find-row {
+        grid-template-columns: 40px 1fr;
+      }
+
+      .find-row time {
+        display: none;
+      }
+    }
+
+    @media (min-width: 768px) {
+      .app-shell {
+        display: block;
+        padding: 20px;
+      }
+
+      .top-bar {
+        display: block;
+      }
+
+      .brand {
+        width: 280px;
+        max-width: 280px;
+        min-width: 230px;
+      }
+
+      .brand h1 {
+        font-size: 24px;
+      }
+
+      .status-pill {
+        top: 104px;
+        left: 20px;
+        right: auto;
+        width: 340px;
+      }
+
+      .map-hint {
+        display: none;
+      }
+
+      .recenter-button {
+        top: 20px;
+        right: 20px;
+        width: 52px;
+        height: 52px;
+        min-height: 52px;
+      }
+
+      .leaflet-bottom.leaflet-right {
+        bottom: 16px;
+      }
+
+      .bottom-bar {
+        left: 20px;
+        right: auto;
+        bottom: 20px;
+        width: 340px;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        border-radius: 10px;
+      }
+
+      .recent-panel,
+      .trails-panel {
+        left: 20px;
+        right: auto;
+        top: 154px;
+        bottom: 106px;
+        width: 340px;
+        max-height: none;
+        border-radius: 10px;
+      }
+
+      .recent-panel.desktop-ready,
+      .trails-panel.desktop-ready {
+        transform: none;
+        opacity: 1;
+        visibility: visible;
+      }
+
+      .recent-list {
+        max-height: calc(100vh - 394px);
+        max-height: calc(100dvh - 394px);
+      }
+
+      .find-row small {
+        max-width: 168px;
+      }
+
+      .drawer-scrim {
+        background: rgba(4, 6, 4, 0.24);
+      }
+
+      .drawer {
+        left: auto;
+        right: 20px;
+        top: 92px;
+        bottom: 20px;
+        width: min(420px, calc(100vw - 400px));
+        min-width: 360px;
+        max-height: none;
+        border-radius: 12px;
+        transform: translateX(calc(100% + 40px));
+      }
+
+      .drawer.open {
+        transform: translateX(0);
+      }
+
+      .drawer-handle {
+        display: none;
+      }
+
+      .marker-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+    }
+
+    @media (min-width: 1120px) {
+      .brand,
+      .bottom-bar,
+      .recent-panel,
+      .trails-panel,
+      .trail-live-card,
+      .status-pill,
+      .map-hint {
+        width: 380px;
+        max-width: 380px;
+      }
+
+      .drawer {
+        width: 460px;
+      }
+
+      .marker-grid {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+      }
+    }
+  </style>
+</head>
+<body>
+  <div id="map" aria-label="Trail it map"></div>
+
+  <main class="app-shell">
+    <header class="top-bar">
+      <div class="brand">
+        <h1>Trail it</h1>
+        <span id="markerSummary">Private field journal</span>
+      </div>
+      <button id="locateBtn" class="recenter-button" type="button" aria-label="Recenter map on my location">
+        <span aria-hidden="true">📍</span>
+      </button>
+      <button id="trailActionBtn" class="trail-action-button" type="button">Start Trail</button>
+      <button id="trailLogsOpenBtn" class="trail-log-button" type="button">Trail Logs</button>
+      <select id="userSwitchSelect" class="user-switcher" aria-label="Switch mock user"></select>
+      <button id="logoutBtn" class="logout-button" type="button">Logout</button>
+      <select id="dataModeSelect" class="data-mode-switcher" aria-label="Switch development data mode">
+        <option value="mock">Mock</option>
+        <option value="supabase">Supabase</option>
+      </select>
+    </header>
+
+    <div id="statusPill" class="status-pill">
+      <span class="status-dot"></span>
+      <span id="statusText">Waiting for GPS...</span>
+    </div>
+
+    <div id="trailLiveCard" class="trail-live-card" aria-label="Live trail stats">
+      <div class="stat">
+        <strong id="liveDistance">0.00</strong>
+        <span>Miles</span>
+      </div>
+      <div class="stat">
+        <strong id="liveSteps">0</strong>
+        <span>Steps</span>
+      </div>
+      <div class="stat">
+        <strong id="liveDuration">0:00</strong>
+        <span>Time</span>
+      </div>
+    </div>
+
+    <div class="map-hint" id="mapHint">Tap anywhere on the map to log a wildlife sign.</div>
+  </main>
+
+  <section id="authScreen" class="auth-screen" aria-label="Trail it account access">
+    <div class="auth-card">
+      <div>
+        <h2 id="authTitle">Log in to Trail it</h2>
+        <p id="authHelpText" class="coords">Use your TrailIt account to continue.</p>
+      </div>
+      <div class="auth-tabs" role="tablist" aria-label="Account mode">
+        <button id="loginTabBtn" class="secondary-button auth-tab active" type="button">Login</button>
+        <button id="signupTabBtn" class="secondary-button auth-tab" type="button">Sign up</button>
+      </div>
+      <form id="authForm" class="auth-form">
+        <label>
+          Email
+          <input id="authEmailInput" type="email" autocomplete="email" required>
+        </label>
+        <label>
+          Password
+          <input id="authPasswordInput" type="password" autocomplete="current-password" required minlength="6">
+        </label>
+        <button id="authSubmitBtn" class="primary-button" type="submit">Login</button>
+        <p id="authMessage" class="auth-message"></p>
+      </form>
+      <button id="authMockModeBtn" class="secondary-button" type="button">Use mock mode</button>
+    </div>
+  </section>
+
+  <section id="recentPanel" class="recent-panel" aria-label="Recent finds">
+    <div class="panel-header">
+      <h2>Recent Finds</h2>
+      <span id="findCount" class="count-chip">0 saved</span>
+    </div>
+    <div class="stats-grid" aria-label="Trail it stats">
+      <div class="stat">
+        <strong id="totalStat">0</strong>
+        <span>Total</span>
+      </div>
+      <div class="stat">
+        <strong id="typeStat">0</strong>
+        <span>Types</span>
+      </div>
+      <div class="stat">
+        <strong id="todayStat">0</strong>
+        <span>Today</span>
+      </div>
+    </div>
+    <div id="recentList" class="recent-list"></div>
+  </section>
+
+  <section id="trailsPanel" class="trails-panel" aria-label="Saved trails">
+    <div class="panel-header">
+      <h2>Saved Trails</h2>
+      <span id="trailCount" class="count-chip">0 saved</span>
+    </div>
+    <div class="stats-grid" aria-label="Trail totals">
+      <div class="stat">
+        <strong id="trailTotalStat">0</strong>
+        <span>Total</span>
+      </div>
+      <div class="stat">
+        <strong id="trailMilesStat">0.00</strong>
+        <span>Miles</span>
+      </div>
+      <div class="stat">
+        <strong id="trailStepsStat">0</strong>
+        <span>Steps</span>
+      </div>
+    </div>
+    <div id="trailList" class="trail-list"></div>
+  </section>
+
+  <nav class="bottom-bar" aria-label="Trail it controls">
+    <button id="mapBtn" class="nav-button active" type="button">
+      <svg viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M3 6l6-3 6 3 6-3v15l-6 3-6-3-6 3V6z"></path><path d="M9 3v15M15 6v15"></path></svg>
+      <span>Map</span>
+    </button>
+    <button id="recentBtn" class="nav-button" type="button">
+      <svg viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M8 6h13M8 12h13M8 18h13"></path><path d="M3 6h.01M3 12h.01M3 18h.01"></path></svg>
+      <span>Finds</span>
+    </button>
+    <button id="trailsBtn" class="nav-button" type="button">
+      <svg viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M4 19c4-7 8 7 16-4"></path><path d="M4 5c4 7 8-7 16 4"></path><path d="M12 10v4"></path></svg>
+      <span>Trails</span>
+    </button>
+    <button id="addHereBtn" class="nav-button" type="button">
+      <svg viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M12 5v14M5 12h14"></path></svg>
+      <span>Add Here</span>
+    </button>
+  </nav>
+
+  <div id="drawerScrim" class="drawer-scrim"></div>
+  <section id="trailLogScreen" class="trail-log-screen" aria-label="Trail Logs">
+    <div class="trail-log-shell">
+      <div class="trail-log-header">
+        <div>
+          <h2>Trail Logs</h2>
+          <p id="currentUserText" class="coords">Signed in locally as Dave</p>
+        </div>
+        <button id="closeTrailLogScreenBtn" class="secondary-button" type="button">Map</button>
+      </div>
+      <div id="trailLogList" class="trail-log-list"></div>
+      <section id="membersPanel" class="members-panel" aria-label="Trail Log members">
+        <h3>Members</h3>
+        <div id="memberList"></div>
+        <div id="inviteRow" class="invite-row">
+          <select id="inviteUserSelect" aria-label="Invite user"></select>
+          <button id="inviteUserBtn" class="secondary-button" type="button">Invite user</button>
+        </div>
+        <p id="memberHelpText" class="coords"></p>
+      </section>
+      <form id="trailLogForm" class="trail-log-form">
+        <label class="label" for="trailLogNameInput">Trail Log name</label>
+        <input id="trailLogNameInput" type="text" placeholder="New Trail Log">
+        <button class="primary-button" type="submit">Create Trail Log</button>
+      </form>
+    </div>
+  </section>
+
+  <section id="logDrawer" class="drawer" aria-label="Log wildlife find">
+    <div class="drawer-handle"></div>
+    <div class="drawer-title-row">
+      <h2 id="drawerTitle">Log Find</h2>
+      <button id="closeDrawerBtn" class="icon-button" type="button" aria-label="Close log form">
+        <svg viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"></path></svg>
+      </button>
+    </div>
+
+    <div class="form-group">
+      <label class="label">Type of Discovery</label>
+      <div id="markerGrid" class="marker-grid"></div>
+    </div>
+
+    <div class="form-group">
+      <label class="label" for="noteInput">Notes</label>
+      <textarea id="noteInput" placeholder="Describe tracks, movement, weather, direction, behaviour..."></textarea>
+    </div>
+
+    <div class="form-group">
+      <input id="photoInput" class="photo-input" type="file" accept="image/*" capture="environment">
+      <button id="photoBtn" class="photo-button" type="button">
+        <svg viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path><circle cx="12" cy="13" r="4"></circle></svg>
+        Add Photo
+      </button>
+      <div id="photoPreview" class="photo-preview">
+        <img id="photoPreviewImage" alt="Selected photo preview">
+        <span id="photoPreviewText">Photo ready to save with this find.</span>
+      </div>
+    </div>
+
+    <p id="coordText" class="coords"></p>
+
+    <div class="button-row">
+      <button id="cancelBtn" class="secondary-button" type="button">Cancel</button>
+      <button id="saveBtn" class="primary-button" type="button">Save Marker</button>
+    </div>
+  </section>
+
+  <section id="saveTrailModal" class="save-trail-modal" aria-label="Save trail">
+    <div class="save-trail-card">
+      <h2>Save Trail</h2>
+      <label for="trailNameInput">
+        Trail name
+        <input id="trailNameInput" type="text" placeholder="Morning trail">
+      </label>
+      <div class="save-trail-stats">
+        <div class="stat">
+          <strong id="saveDistance">0.00</strong>
+          <span>Miles</span>
+        </div>
+        <div class="stat">
+          <strong id="saveSteps">0</strong>
+          <span>Steps</span>
+        </div>
+        <div class="stat">
+          <strong id="saveDuration">0:00</strong>
+          <span>Time</span>
+        </div>
+      </div>
+      <p id="saveRouteSummary" class="coords">0 route points saved for map drawing.</p>
+      <div class="button-row">
+        <button id="discardTrailBtn" class="secondary-button" type="button">Discard</button>
+        <button id="saveTrailBtn" class="primary-button" type="button">Save Trail</button>
+      </div>
+    </div>
+  </section>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="./js/trailit-env.js"></script>
+  <script src="./js/trailit-supabase-config.js"></script>
+  <script>
+    document.addEventListener("DOMContentLoaded", () => {
+    const SUPABASE_SETUP = window.TrailItSupabase?.getConfig() || {
+      dataMode: "mock",
+      supabaseUrl: "",
+      supabasePublishableKey: "",
+      supabasePhotoBucket: "trail-photos",
+      isSupabaseConfigured: false
+    };
+    const TRAILIT_DATA_MODE = SUPABASE_SETUP.dataMode;
+    const SUPABASE_CLIENT = window.TrailItSupabase?.createClient() || null;
+    window.TrailItRuntime = {
+      dataMode: TRAILIT_DATA_MODE,
+      supabase: {
+        configured: SUPABASE_SETUP.isSupabaseConfigured,
+        photoBucket: SUPABASE_SETUP.supabasePhotoBucket
+      },
+      auth: {
+        user: null
+      },
+      isDevToggleEnabled: SUPABASE_SETUP.isDevToggleEnabled
+    };
+
+    const DATA_STORAGE_KEY = "trailit.localDb.v1";
+    const LEGACY_MARKERS_STORAGE_KEY = "trailit.markers.v1";
+    const LEGACY_MARKERS_FALLBACK_KEY = "trailit.legacyMarkers.v1";
+    const LEGACY_TRAILS_STORAGE_KEY = "trailit.trails.v1";
+    const TRAIL_LOG_CONTEXT_STORAGE_KEY = "trailit.activeTrailLogId.v1";
+    const USER_CONTEXT_STORAGE_KEY = "trailit.currentUserId.v1";
+    const CURRENT_USER_ID = "user-dave";
+    const ACTIVE_TRAIL_LOG_ID = "trail-log-dave-private";
+    const OWNER_PERMISSIONS = {
+      canRead: true,
+      canWriteSpottings: true,
+      canWriteTrails: true,
+      canAddNotes: true,
+      canEditOwnInputs: true,
+      canEditOthersInputs: true
+    };
+    const READ_ONLY_PERMISSIONS = {
+      canRead: true,
+      canWriteSpottings: false,
+      canWriteTrails: false,
+      canAddNotes: false,
+      canEditOwnInputs: false,
+      canEditOthersInputs: false
+    };
+    const USER_ACCENT_COLORS = ["#7f9f5d", "#b37a49", "#4f7f79", "#d98b6b", "#8a7bb8", "#c4d4a2"];
+    const DEFAULT_CENTER = [54.5, -3.0];
+    const METERS_PER_MILE = 1609.344;
+    const STEP_STRIDE_METERS = 0.762;
+
+    const types = {
+      Rabbit: {
+        color: "#9f7c55",
+        svg: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M8.5 10.5C5.8 8.6 4.7 5 5.7 2.6c2.7.4 4.8 3.2 5 6.2"/><path d="M13.5 9c.4-3 2.6-5.6 5.1-6.1.9 2.5-.3 5.9-3 7.6"/><path d="M6.5 15.2c0-3.6 2.7-6 5.6-6s5.6 2.4 5.6 6c0 3.3-2.4 5.8-5.6 5.8s-5.6-2.5-5.6-5.8z"/><path d="M9.3 14.3h.01M14.8 14.3h.01"/><path d="M11.2 16.2c.5.4 1.1.4 1.7 0"/></svg>'
+      },
+      Deer: {
+        color: "#8a623c",
+        svg: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 4v4l-3-2M16 4v4l3-2"/><path d="M9 9c-1-2-2.5-3.2-4.5-3.7M15 9c1-2 2.5-3.2 4.5-3.7"/><path d="M8.3 11.5c.8-1.7 2-2.5 3.7-2.5s2.9.8 3.7 2.5l1.1 2.4c.8 1.9-.4 4.1-2.5 4.1H9.7c-2.1 0-3.3-2.2-2.5-4.1l1.1-2.4z"/><path d="M10 14h.01M14 14h.01"/><path d="M11.2 16.2h1.6"/></svg>'
+      },
+      Owl: {
+        color: "#6d6f4b",
+        svg: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 8.5C5 5.5 7.5 3 10.5 3H12c3.9 0 7 3.1 7 7v4.5c0 3-2.5 5.5-5.5 5.5h-3C7.5 20 5 17.5 5 14.5v-6z"/><path d="M7 5l3.5 3L12 4l1.5 4L17 5"/><circle cx="9.5" cy="11.5" r="1.6"/><circle cx="14.5" cy="11.5" r="1.6"/><path d="M12 13.5l-1 1h2l-1-1z"/><path d="M9 17c1.8 1 4.2 1 6 0"/></svg>'
+      },
+      Bird: {
+        color: "#4f7f79",
+        svg: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 13c3.5-4.8 8.2-6.2 14-4"/><path d="M11 9c1.5-3.2 4.2-4.8 8-4.8-1.1 3.2-3.1 5.4-6 6.8"/><path d="M7 15c2.2 2.8 5.3 3.8 9.5 3"/><path d="M17.5 8.5L21 9.8l-3.2 1.4"/><path d="M8.5 13.7c2.1-.2 3.8-1.1 5-2.7"/></svg>'
+      },
+      Plant: {
+        color: "#5f8a45",
+        svg: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21V9"/><path d="M12 10C8 9.8 5.6 7.7 5 4c4.1-.1 6.3 1.8 7 6z"/><path d="M12 13c4.1-.4 6.5-2.5 7-6.2-4.2 0-6.5 2.1-7 6.2z"/><path d="M12 18c-2.8-.3-4.7-1.8-5.5-4.5 3.1-.1 4.9 1.4 5.5 4.5z"/></svg>'
+      },
+      Track: {
+        color: "#725846",
+        svg: '<svg viewBox="0 0 24 24" fill="currentColor"><ellipse cx="7.3" cy="6.2" rx="1.8" ry="2.5" transform="rotate(-28 7.3 6.2)"/><ellipse cx="12" cy="4.8" rx="1.8" ry="2.6"/><ellipse cx="16.7" cy="6.2" rx="1.8" ry="2.5" transform="rotate(28 16.7 6.2)"/><ellipse cx="8.8" cy="11.2" rx="1.7" ry="2.3" transform="rotate(-42 8.8 11.2)"/><ellipse cx="15.2" cy="11.2" rx="1.7" ry="2.3" transform="rotate(42 15.2 11.2)"/><path d="M7.7 17.3c0-2.7 2-4.7 4.3-4.7s4.3 2 4.3 4.7c0 2.2-1.8 3.4-4.3 3.4s-4.3-1.2-4.3-3.4z"/></svg>'
+      },
+      Viewpoint: {
+        color: "#5f7444",
+        svg: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 17l5.2-6.2 3.4 4 2.5-3.1L21 17H3z"/><path d="M14 7.5a2.5 2.5 0 1 0 5 0 2.5 2.5 0 0 0-5 0z"/><path d="M4 20h16"/></svg>'
+      },
+      SmokeSpots: {
+        color: "#8c5542",
+        svg: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 20c-1.5-.8-2.5-2.2-2.5-4 0-2.4 1.6-3.9 3.1-5.2 1.3-1.1 2.4-2.1 1.8-3.8 2.9 1.2 5 3.5 4.2 6.7 1.1-.5 1.8-1.4 2.1-2.5 1.4 1.2 2.1 2.7 2.1 4.5 0 2-1 3.5-2.7 4.3"/><path d="M10 20c-.5-.5-.8-1.2-.8-2 0-1.3.9-2 1.7-2.8.8-.8 1.4-1.5 1.1-2.7 1.8 1 3 2.5 2.4 4.6.6-.3 1-.8 1.2-1.4.8.8 1.2 1.6 1.2 2.6 0 .7-.3 1.3-.8 1.7"/></svg>'
+      },
+      Other: {
+        color: "#71766b",
+        svg: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s7-5.1 7-11a7 7 0 0 0-14 0c0 5.9 7 11 7 11z"/><circle cx="12" cy="10" r="2.4"/><path d="M12 5.5v1M12 13.5v1M7.5 10h1M15.5 10h1"/></svg>'
+      }
+    };
+
+    /**
+     * TrailIt local data models mirror the Supabase tables planned for later.
+     *
+     * Base fields on every model:
+     * - id {string}
+     * - createdAt {string ISO date}
+     * - updatedAt {string ISO date}
+     *
+     * Users: { id, createdAt, updatedAt, displayName, accentColor }
+     * TrailLogs: { id, createdAt, updatedAt, name, ownerUserId, createdByUserId, visibility }
+     * TrailLogMembers: { id, createdAt, updatedAt, trailLogId, userId, role, canRead, canWriteSpottings, canWriteTrails, canAddNotes, canEditOwnInputs, canEditOthersInputs }
+     * Sightings: { id, createdAt, updatedAt, trailLogId, createdByUserId, type, latitude, longitude }
+     * Trails: { id, createdAt, updatedAt, trailLogId, createdByUserId, name, date, distanceMiles, steps, durationSeconds, startTime, endTime, routeCoordinates }
+     * Notes: { id, createdAt, updatedAt, trailLogId, createdByUserId, sightingId, trailId, content }
+     * Photos: { id, createdAt, updatedAt, trailLogId, createdByUserId, sightingId, trailId, dataUrl, caption }
+     */
+    const LocalMockTrailItRepository = (() => {
+      const collections = ["users", "trailLogs", "trailLogMembers", "sightings", "trails", "notes", "photos"];
+
+      function nowIso() {
+        return new Date().toISOString();
+      }
+
+      function emptyDb() {
+        return collections.reduce((db, key) => {
+          db[key] = [];
+          return db;
+        }, {});
+      }
+
+      function clone(value) {
+        return JSON.parse(JSON.stringify(value));
+      }
+
+      function baseRecord(fields) {
+        const timestamp = fields.createdAt || nowIso();
+        return {
+          id: fields.id || createId("record"),
+          createdAt: timestamp,
+          updatedAt: fields.updatedAt || timestamp,
+          ...fields
+        };
+      }
+
+      function normalizeDb(db) {
+        const next = emptyDb();
+        collections.forEach(key => {
+          next[key] = Array.isArray(db?.[key]) ? db[key].map(item => baseRecord(item || {})) : [];
+        });
+        next.trailLogs = next.trailLogs.map(trailLog => ({
+          visibility: "private",
+          ...trailLog,
+          createdByUserId: trailLog.createdByUserId || trailLog.ownerUserId || CURRENT_USER_ID
+        }));
+        next.trailLogMembers = next.trailLogMembers.map(member => normalizeMember(member));
+        ensureMockData(next);
+        ensureUserAccentDefaults(next);
+        ensureUniqueMemberAccentColors(next);
+        migrateLegacyMarkers(next);
+        migrateLegacyTrails(next);
+        return next;
+      }
+
+      function normalizeMember(member) {
+        const permissions = member.role === "owner" ? OWNER_PERMISSIONS : READ_ONLY_PERMISSIONS;
+        return {
+          ...permissions,
+          ...member,
+          ...(member.role === "owner" ? OWNER_PERMISSIONS : {})
+        };
+      }
+
+      function ensureMockData(db) {
+        const users = [
+          baseRecord({ id: CURRENT_USER_ID, displayName: "Dave", accentColor: "#7f9f5d" }),
+          baseRecord({ id: "user-cali-g", displayName: "Cali G", accentColor: "#b37a49" })
+        ];
+        users.forEach(user => {
+          if (!db.users.some(item => item.id === user.id)) db.users.push(user);
+        });
+
+        const trailLogs = [
+          baseRecord({
+            id: ACTIVE_TRAIL_LOG_ID,
+            name: "Dave's private field journal",
+            ownerUserId: CURRENT_USER_ID,
+            createdByUserId: CURRENT_USER_ID,
+            visibility: "private"
+          }),
+          baseRecord({
+            id: "trail-log-cali-g-private",
+            name: "Cali G's private trail log",
+            ownerUserId: "user-cali-g",
+            createdByUserId: "user-cali-g",
+            visibility: "private"
+          })
+        ];
+        trailLogs.forEach(trailLog => {
+          if (!db.trailLogs.some(item => item.id === trailLog.id)) db.trailLogs.push(trailLog);
+        });
+
+        const members = [
+          baseRecord({
+            id: "member-dave-own-log",
+            trailLogId: ACTIVE_TRAIL_LOG_ID,
+            userId: CURRENT_USER_ID,
+            role: "owner",
+            ...OWNER_PERMISSIONS
+          }),
+          baseRecord({
+            id: "member-cali-own-log",
+            trailLogId: "trail-log-cali-g-private",
+            userId: "user-cali-g",
+            role: "owner",
+            ...OWNER_PERMISSIONS
+          })
+        ];
+        members.forEach(member => {
+          if (!db.trailLogMembers.some(item => item.id === member.id)) db.trailLogMembers.push(member);
+        });
+      }
+
+      function ensureUserAccentDefaults(db) {
+        db.users.forEach((user, index) => {
+          if (!user.accentColor) user.accentColor = USER_ACCENT_COLORS[index % USER_ACCENT_COLORS.length];
+        });
+      }
+
+      function pickAvailableAccentColor(usedColors) {
+        return USER_ACCENT_COLORS.find(color => !usedColors.has(color.toLowerCase())) || USER_ACCENT_COLORS[0];
+      }
+
+      function ensureUniqueMemberAccentColors(db) {
+        db.trailLogs.forEach(trailLog => {
+          const members = db.trailLogMembers
+            .filter(member => member.trailLogId === trailLog.id)
+            .sort((a, b) => Date.parse(a.createdAt) - Date.parse(b.createdAt));
+          const usedColors = new Set();
+          members.forEach(member => {
+            const user = db.users.find(item => item.id === member.userId);
+            if (!user) return;
+            const currentColor = (user.accentColor || "").toLowerCase();
+            if (!currentColor || usedColors.has(currentColor)) {
+              user.accentColor = pickAvailableAccentColor(usedColors);
+            }
+            usedColors.add(user.accentColor.toLowerCase());
+          });
+        });
+      }
+
+      function migrateLegacyMarkers(db) {
+        const raw = localStorage.getItem(LEGACY_MARKERS_STORAGE_KEY) || localStorage.getItem(LEGACY_MARKERS_FALLBACK_KEY);
+        if (!raw) return;
+
+        try {
+          const markers = JSON.parse(raw);
+          if (!Array.isArray(markers)) return;
+
+          markers.forEach(marker => {
+            if (db.sightings.some(item => item.id === marker.id)) return;
+            const createdAt = new Date(marker.createdAt || Date.now()).toISOString();
+            db.sightings.push(baseRecord({
+              id: marker.id,
+              createdAt,
+              updatedAt: createdAt,
+              trailLogId: ACTIVE_TRAIL_LOG_ID,
+              createdByUserId: CURRENT_USER_ID,
+              type: marker.type || "Other",
+              latitude: marker.lat,
+              longitude: marker.lng
+            }));
+
+            if (marker.note) {
+              db.notes.push(baseRecord({
+                id: `note-${marker.id}`,
+                createdAt,
+                updatedAt: createdAt,
+                trailLogId: ACTIVE_TRAIL_LOG_ID,
+                createdByUserId: CURRENT_USER_ID,
+                sightingId: marker.id,
+                trailId: null,
+                content: marker.note
+              }));
+            }
+
+            if (marker.photo) {
+              db.photos.push(baseRecord({
+                id: `photo-${marker.id}`,
+                createdAt,
+                updatedAt: createdAt,
+                trailLogId: ACTIVE_TRAIL_LOG_ID,
+                createdByUserId: CURRENT_USER_ID,
+                sightingId: marker.id,
+                trailId: null,
+                dataUrl: marker.photo,
+                caption: ""
+              }));
+            }
+          });
+          localStorage.removeItem(LEGACY_MARKERS_STORAGE_KEY);
+          localStorage.removeItem(LEGACY_MARKERS_FALLBACK_KEY);
+        } catch (error) {
+          showStatus("Saved marker data could not be migrated.");
+        }
+      }
+
+      function migrateLegacyTrails(db) {
+        const raw = localStorage.getItem(LEGACY_TRAILS_STORAGE_KEY);
+        if (!raw) return;
+
+        try {
+          const trails = JSON.parse(raw);
+          if (!Array.isArray(trails)) return;
+
+          trails.forEach(trail => {
+            if (db.trails.some(item => item.id === trail.id)) return;
+            const createdAt = new Date(trail.date || trail.endTime || Date.now()).toISOString();
+            db.trails.push(baseRecord({
+              id: trail.id,
+              createdAt,
+              updatedAt: createdAt,
+              trailLogId: ACTIVE_TRAIL_LOG_ID,
+              createdByUserId: CURRENT_USER_ID,
+              name: trail.name,
+              date: trail.date,
+              distanceMiles: trail.distanceMiles,
+              steps: trail.steps,
+              durationSeconds: trail.durationSeconds,
+              startTime: trail.startTime,
+              endTime: trail.endTime,
+              routeCoordinates: trail.routeCoordinates || []
+            }));
+          });
+          localStorage.removeItem(LEGACY_TRAILS_STORAGE_KEY);
+        } catch (error) {
+          showStatus("Saved trails could not be migrated.");
+        }
+      }
+
+      function loadDb() {
+        try {
+          const raw = localStorage.getItem(DATA_STORAGE_KEY);
+          return normalizeDb(raw ? JSON.parse(raw) : emptyDb());
+        } catch (error) {
+          showStatus("Trail it data could not be read.");
+          return normalizeDb(emptyDb());
+        }
+      }
+
+      function saveDb(db) {
+        localStorage.setItem(DATA_STORAGE_KEY, JSON.stringify(db));
+      }
+
+      function withDb(mutator) {
+        const db = loadDb();
+        const result = mutator(db);
+        saveDb(db);
+        return result;
+      }
+
+      function createCrud(collection, prepare = fields => fields) {
+        return {
+          create(fields) {
+            return withDb(db => {
+              const record = baseRecord({ id: createId(collection.slice(0, -1) || collection), ...prepare(fields) });
+              db[collection].push(record);
+              return clone(record);
+            });
+          },
+          list(filter = {}) {
+            const db = loadDb();
+            return clone(db[collection].filter(item =>
+              Object.entries(filter).every(([key, value]) => item[key] === value)
+            ));
+          },
+          get(id) {
+            const db = loadDb();
+            const record = db[collection].find(item => item.id === id);
+            return record ? clone(record) : null;
+          },
+          update(id, updates) {
+            return withDb(db => {
+              const record = db[collection].find(item => item.id === id);
+              if (!record) return null;
+              Object.assign(record, updates, { updatedAt: nowIso() });
+              return clone(record);
+            });
+          },
+          delete(id) {
+            return withDb(db => {
+              const before = db[collection].length;
+              db[collection] = db[collection].filter(item => item.id !== id);
+              return before !== db[collection].length;
+            });
+          }
+        };
+      }
+
+      const service = {
+        users: createCrud("users"),
+        trailLogs: createCrud("trailLogs", fields => ({ visibility: "private", ...fields })),
+        trailLogMembers: createCrud("trailLogMembers"),
+        sightings: createCrud("sightings"),
+        trails: createCrud("trails"),
+        notes: createCrud("notes"),
+        photos: createCrud("photos"),
+        defaultTrailLogId: ACTIVE_TRAIL_LOG_ID,
+        initialize() {
+          saveDb(loadDb());
+        },
+        getCurrentUserId() {
+          const storedUserId = localStorage.getItem(USER_CONTEXT_STORAGE_KEY);
+          const users = this.users.list();
+          if (storedUserId && users.some(user => user.id === storedUserId)) return storedUserId;
+          this.setCurrentUserId(CURRENT_USER_ID);
+          return CURRENT_USER_ID;
+        },
+        setCurrentUserId(userId) {
+          localStorage.setItem(USER_CONTEXT_STORAGE_KEY, userId);
+          const activeId = localStorage.getItem(TRAIL_LOG_CONTEXT_STORAGE_KEY);
+          if (activeId && !this.listTrailLogsForUser(userId).some(log => log.id === activeId)) {
+            localStorage.removeItem(TRAIL_LOG_CONTEXT_STORAGE_KEY);
+          }
+          return userId;
+        },
+        getCurrentUser() {
+          return this.users.get(this.getCurrentUserId());
+        },
+        listUsers() {
+          return this.users.list().sort((a, b) => a.displayName.localeCompare(b.displayName));
+        },
+        getActiveTrailLogId() {
+          const activeId = localStorage.getItem(TRAIL_LOG_CONTEXT_STORAGE_KEY);
+          const logs = this.listTrailLogsForUser(this.getCurrentUserId());
+          if (activeId && logs.some(log => log.id === activeId)) return activeId;
+          const fallbackId = logs[0]?.id || ACTIVE_TRAIL_LOG_ID;
+          this.setActiveTrailLogId(fallbackId);
+          return fallbackId;
+        },
+        setActiveTrailLogId(trailLogId) {
+          localStorage.setItem(TRAIL_LOG_CONTEXT_STORAGE_KEY, trailLogId);
+          return trailLogId;
+        },
+        getActiveTrailLog() {
+          return this.trailLogs.get(this.getActiveTrailLogId());
+        },
+        listTrailLogsForUser(userId = this.getCurrentUserId()) {
+          const db = loadDb();
+          const memberTrailLogIds = new Set(
+            db.trailLogMembers
+              .filter(member => member.userId === userId)
+              .map(member => member.trailLogId)
+          );
+          return clone(db.trailLogs
+            .filter(trailLog => memberTrailLogIds.has(trailLog.id))
+            .sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt)));
+        },
+        createTrailLog(name) {
+          return withDb(db => {
+            const userId = service.getCurrentUserId();
+            const trailLog = baseRecord({
+              id: createId("trail-log"),
+              name,
+              ownerUserId: userId,
+              createdByUserId: userId,
+              visibility: "private"
+            });
+            db.trailLogs.push(trailLog);
+            db.trailLogMembers.push(baseRecord({
+              id: createId("trail-log-member"),
+              trailLogId: trailLog.id,
+              userId,
+              role: "owner",
+              ...OWNER_PERMISSIONS
+            }));
+            localStorage.setItem(TRAIL_LOG_CONTEXT_STORAGE_KEY, trailLog.id);
+            return clone(trailLog);
+          });
+        },
+        getMember(trailLogId = this.getActiveTrailLogId(), userId = this.getCurrentUserId()) {
+          const db = loadDb();
+          const member = db.trailLogMembers.find(item => item.trailLogId === trailLogId && item.userId === userId);
+          return member ? clone(normalizeMember(member)) : null;
+        },
+        getActiveMember() {
+          return this.getMember();
+        },
+        getActivePermissions() {
+          const trailLog = this.getActiveTrailLog();
+          const member = this.getActiveMember();
+          if (trailLog?.ownerUserId === this.getCurrentUserId() || member?.role === "owner") return clone(OWNER_PERMISSIONS);
+          return clone(member || READ_ONLY_PERMISSIONS);
+        },
+        canManageActiveTrailLog() {
+          const trailLog = this.getActiveTrailLog();
+          const member = this.getActiveMember();
+          return trailLog?.ownerUserId === this.getCurrentUserId() || member?.role === "owner";
+        },
+        listMembers(trailLogId = this.getActiveTrailLogId()) {
+          const db = loadDb();
+          const usersById = new Map(db.users.map(user => [user.id, user]));
+          return clone(db.trailLogMembers
+            .filter(member => member.trailLogId === trailLogId)
+            .map(member => ({ ...normalizeMember(member), user: usersById.get(member.userId) || null })));
+        },
+        listInvitableUsers(trailLogId = this.getActiveTrailLogId()) {
+          const db = loadDb();
+          const memberUserIds = new Set(db.trailLogMembers.filter(member => member.trailLogId === trailLogId).map(member => member.userId));
+          return clone(db.users.filter(user => !memberUserIds.has(user.id)));
+        },
+        inviteUserToActiveTrailLog(userId) {
+          if (!this.canManageActiveTrailLog()) return null;
+          return withDb(db => {
+            const trailLogId = service.getActiveTrailLogId();
+            if (db.trailLogMembers.some(member => member.trailLogId === trailLogId && member.userId === userId)) return null;
+            const member = baseRecord({
+              id: createId("trail-log-member"),
+              trailLogId,
+              userId,
+              role: "reader",
+              ...READ_ONLY_PERMISSIONS
+            });
+            db.trailLogMembers.push(member);
+            ensureUniqueMemberAccentColors(db);
+            return clone(member);
+          });
+        },
+        updateMemberPermissions(memberId, permissions) {
+          if (!this.canManageActiveTrailLog()) return null;
+          return withDb(db => {
+            const member = db.trailLogMembers.find(item => item.id === memberId && item.trailLogId === service.getActiveTrailLogId());
+            if (!member || member.role === "owner" || member.userId === service.getCurrentUserId()) return member ? clone(normalizeMember(member)) : null;
+            Object.assign(member, permissions, { canRead: true, updatedAt: nowIso() });
+            return clone(normalizeMember(member));
+          });
+        },
+        listSightingMarkers(trailLogId = this.getActiveTrailLogId()) {
+          const db = loadDb();
+          const usersById = new Map(db.users.map(user => [user.id, user]));
+          return db.sightings
+            .filter(sighting => sighting.trailLogId === trailLogId)
+            .map(sighting => {
+              const note = db.notes.find(item => item.sightingId === sighting.id);
+              const photo = db.photos.find(item => item.sightingId === sighting.id);
+              const creator = usersById.get(sighting.createdByUserId);
+              const noteCreator = note ? usersById.get(note.createdByUserId) : null;
+              const photoCreator = photo ? usersById.get(photo.createdByUserId) : null;
+              return {
+                id: sighting.id,
+                type: sighting.type,
+                note: note?.content || "",
+                noteCreatedByUserId: note?.createdByUserId || null,
+                noteCreatedByName: noteCreator?.displayName || "",
+                noteAccentColor: noteCreator?.accentColor || creator?.accentColor || USER_ACCENT_COLORS[0],
+                lat: sighting.latitude,
+                lng: sighting.longitude,
+                photo: photo?.dataUrl || "",
+                photoCreatedByUserId: photo?.createdByUserId || null,
+                photoCreatedByName: photoCreator?.displayName || "",
+                photoAccentColor: photoCreator?.accentColor || creator?.accentColor || USER_ACCENT_COLORS[0],
+                createdAt: Date.parse(sighting.createdAt),
+                updatedAt: Date.parse(sighting.updatedAt),
+                trailLogId: sighting.trailLogId,
+                createdByUserId: sighting.createdByUserId,
+                createdByName: creator?.displayName || "Unknown",
+                accentColor: creator?.accentColor || USER_ACCENT_COLORS[0]
+              };
+            });
+        },
+        createSightingMarker({ type, note, lat, lng, photo }) {
+          return withDb(db => {
+            const trailLogId = service.getActiveTrailLogId();
+            const userId = service.getCurrentUserId();
+            const permissions = service.getActivePermissions();
+            if (!permissions.canWriteSpottings) return null;
+            const sighting = baseRecord({
+              id: createId("sighting"),
+              trailLogId,
+              createdByUserId: userId,
+              type,
+              latitude: lat,
+              longitude: lng
+            });
+            db.sightings.push(sighting);
+
+            if (note && permissions.canAddNotes) {
+              db.notes.push(baseRecord({
+                id: createId("note"),
+                trailLogId,
+                createdByUserId: userId,
+                sightingId: sighting.id,
+                trailId: null,
+                content: note
+              }));
+            }
+
+            if (photo && permissions.canAddNotes) {
+              db.photos.push(baseRecord({
+                id: createId("photo"),
+                trailLogId,
+                createdByUserId: userId,
+                sightingId: sighting.id,
+                trailId: null,
+                dataUrl: photo,
+                caption: ""
+              }));
+            }
+
+            return {
+              id: sighting.id,
+              type: sighting.type,
+              note: note || "",
+              noteCreatedByUserId: note ? userId : null,
+              noteCreatedByName: note ? (service.getCurrentUser()?.displayName || "Unknown") : "",
+              noteAccentColor: service.getCurrentUser()?.accentColor || USER_ACCENT_COLORS[0],
+              lat: sighting.latitude,
+              lng: sighting.longitude,
+              photo: photo || "",
+              photoCreatedByUserId: photo ? userId : null,
+              photoCreatedByName: photo ? (service.getCurrentUser()?.displayName || "Unknown") : "",
+              photoAccentColor: service.getCurrentUser()?.accentColor || USER_ACCENT_COLORS[0],
+              createdAt: Date.parse(sighting.createdAt),
+              updatedAt: Date.parse(sighting.updatedAt),
+              trailLogId: sighting.trailLogId,
+              createdByUserId: sighting.createdByUserId,
+              createdByName: service.getCurrentUser()?.displayName || "Unknown",
+              accentColor: service.getCurrentUser()?.accentColor || USER_ACCENT_COLORS[0]
+            };
+          });
+        },
+        deleteSightingMarker(id) {
+          return withDb(db => {
+            const trailLogId = service.getActiveTrailLogId();
+            const userId = service.getCurrentUserId();
+            const permissions = service.getActivePermissions();
+            const sighting = db.sightings.find(item => item.id === id && item.trailLogId === trailLogId);
+            if (!sighting) return false;
+            if (!permissions.canEditOthersInputs && !(permissions.canEditOwnInputs && sighting.createdByUserId === userId)) return false;
+            db.sightings = db.sightings.filter(item => item.id !== id || item.trailLogId !== trailLogId);
+            db.notes = db.notes.filter(item => item.sightingId !== id);
+            db.photos = db.photos.filter(item => item.sightingId !== id);
+            return true;
+          });
+        },
+        listTrailRoutes(trailLogId = this.getActiveTrailLogId()) {
+          const db = loadDb();
+          const usersById = new Map(db.users.map(user => [user.id, user]));
+          return clone(db.trails
+            .filter(trail => trail.trailLogId === trailLogId)
+            .map(trail => {
+              const creator = usersById.get(trail.createdByUserId);
+              return {
+                ...trail,
+                createdByName: creator?.displayName || "Unknown",
+                accentColor: creator?.accentColor || USER_ACCENT_COLORS[0]
+              };
+            })
+            .sort((a, b) => Date.parse(b.date || b.createdAt) - Date.parse(a.date || a.createdAt)));
+        },
+        createTrailRoute(fields) {
+          if (!this.getActivePermissions().canWriteTrails) return null;
+          const trail = this.trails.create({
+            trailLogId: this.getActiveTrailLogId(),
+            createdByUserId: this.getCurrentUserId(),
+            ...fields
+          });
+          const creator = this.getCurrentUser();
+          return {
+            ...trail,
+            createdByName: creator?.displayName || "Unknown",
+            accentColor: creator?.accentColor || USER_ACCENT_COLORS[0]
+          };
+        }
+      };
+
+      return service;
+    })();
+
+    function createSupabaseTrailItRepository({ client }) {
+      const cache = {
+        users: [],
+        trailLogs: [],
+        trailLogMembers: [],
+        sightings: [],
+        trails: [],
+        notes: [],
+        photos: []
+      };
+      let currentUser = null;
+
+      function nowIso() {
+        return new Date().toISOString();
+      }
+
+      function baseRecord(fields) {
+        const timestamp = fields.createdAt || nowIso();
+        return {
+          id: fields.id || createId("record"),
+          createdAt: timestamp,
+          updatedAt: fields.updatedAt || timestamp,
+          ...fields
+        };
+      }
+
+      function cloneValue(value) {
+        return JSON.parse(JSON.stringify(value));
+      }
+
+      function fromSnake(row) {
+        if (!row) return null;
+        return {
+          id: row.id,
+          createdAt: row.created_at,
+          updatedAt: row.updated_at,
+          displayName: row.display_name,
+          email: row.email || "",
+          accentColor: row.accent_color,
+          name: row.name,
+          ownerUserId: row.owner_user_id,
+          createdByUserId: row.created_by_user_id,
+          visibility: row.visibility,
+          trailLogId: row.trail_log_id,
+          userId: row.user_id,
+          role: row.role,
+          canRead: row.can_read,
+          canWriteSpottings: row.can_write_spottings,
+          canWriteTrails: row.can_write_trails,
+          canAddNotes: row.can_add_notes,
+          canEditOwnInputs: row.can_edit_own_inputs,
+          canEditOthersInputs: row.can_edit_others_inputs,
+          type: row.type,
+          latitude: row.latitude,
+          longitude: row.longitude,
+          date: row.date,
+          distanceMiles: row.distance_miles,
+          steps: row.steps,
+          durationSeconds: row.duration_seconds,
+          startTime: row.start_time,
+          endTime: row.end_time,
+          routeCoordinates: row.route_coordinates || [],
+          sightingId: row.sighting_id,
+          trailId: row.trail_id,
+          content: row.content,
+          dataUrl: row.data_url || row.storage_path || "",
+          storagePath: row.storage_path || "",
+          caption: row.caption || ""
+        };
+      }
+
+      function toProfileRow(user) {
+        return {
+          id: user.id,
+          display_name: user.user_metadata?.display_name || user.email || "TrailIt user",
+          email: user.email || "",
+          accent_color: USER_ACCENT_COLORS[0],
+          updated_at: nowIso()
+        };
+      }
+
+      function toTrailLogRow(trailLog) {
+        return {
+          id: trailLog.id,
+          name: trailLog.name,
+          owner_user_id: trailLog.ownerUserId,
+          created_by_user_id: trailLog.createdByUserId,
+          visibility: trailLog.visibility || "private"
+        };
+      }
+
+      function toMemberRow(member) {
+        return {
+          id: member.id,
+          trail_log_id: member.trailLogId,
+          user_id: member.userId,
+          role: member.role,
+          can_read: member.canRead,
+          can_write_spottings: member.canWriteSpottings,
+          can_write_trails: member.canWriteTrails,
+          can_add_notes: member.canAddNotes,
+          can_edit_own_inputs: member.canEditOwnInputs,
+          can_edit_others_inputs: member.canEditOthersInputs
+        };
+      }
+
+      function toSightingRow(sighting) {
+        return {
+          id: sighting.id,
+          trail_log_id: sighting.trailLogId,
+          created_by_user_id: sighting.createdByUserId,
+          type: sighting.type,
+          latitude: sighting.latitude,
+          longitude: sighting.longitude
+        };
+      }
+
+      function toTrailRow(trail) {
+        return {
+          id: trail.id,
+          trail_log_id: trail.trailLogId,
+          created_by_user_id: trail.createdByUserId,
+          name: trail.name,
+          date: trail.date,
+          distance_miles: trail.distanceMiles,
+          steps: trail.steps,
+          duration_seconds: trail.durationSeconds,
+          start_time: trail.startTime,
+          end_time: trail.endTime,
+          route_coordinates: trail.routeCoordinates || []
+        };
+      }
+
+      function toNoteRow(note) {
+        return {
+          id: note.id,
+          trail_log_id: note.trailLogId,
+          created_by_user_id: note.createdByUserId,
+          sighting_id: note.sightingId,
+          trail_id: note.trailId,
+          content: note.content
+        };
+      }
+
+      function toPhotoRow(photo) {
+        return {
+          id: photo.id,
+          trail_log_id: photo.trailLogId,
+          created_by_user_id: photo.createdByUserId,
+          sighting_id: photo.sightingId,
+          trail_id: photo.trailId,
+          storage_path: photo.storagePath || "",
+          caption: photo.caption || ""
+        };
+      }
+
+      function normalizeCachedMember(member) {
+        const permissions = member.role === "owner" ? OWNER_PERMISSIONS : READ_ONLY_PERMISSIONS;
+        return {
+          ...permissions,
+          ...member,
+          ...(member.role === "owner" ? OWNER_PERMISSIONS : {})
+        };
+      }
+
+      function getUsersById() {
+        return new Map(cache.users.map(user => [user.id, user]));
+      }
+
+      function getActiveTrailLogIdFromCache() {
+        const activeId = localStorage.getItem(TRAIL_LOG_CONTEXT_STORAGE_KEY);
+        const logs = service.listTrailLogsForUser();
+        if (activeId && logs.some(log => log.id === activeId)) return activeId;
+        const fallbackId = logs[0]?.id || "";
+        if (fallbackId) service.setActiveTrailLogId(fallbackId);
+        return fallbackId;
+      }
+
+      function pickAvailableAccentColor(usedColors) {
+        return USER_ACCENT_COLORS.find(color => !usedColors.has(color.toLowerCase())) || USER_ACCENT_COLORS[0];
+      }
+
+      function ensureUniqueMemberAccentColors(db) {
+        db.trailLogs.forEach(trailLog => {
+          const members = db.trailLogMembers
+            .filter(member => member.trailLogId === trailLog.id)
+            .sort((a, b) => Date.parse(a.createdAt) - Date.parse(b.createdAt));
+          const usedColors = new Set();
+          members.forEach(member => {
+            const user = db.users.find(item => item.id === member.userId);
+            if (!user) return;
+            const currentColor = (user.accentColor || "").toLowerCase();
+            if (!currentColor || usedColors.has(currentColor)) {
+              user.accentColor = pickAvailableAccentColor(usedColors);
+            }
+            usedColors.add(user.accentColor.toLowerCase());
+          });
+        });
+      }
+
+      function handleError(error, fallbackMessage) {
+        const message = error?.message || fallbackMessage;
+        console.error(message, error);
+        showStatus(message, true);
+      }
+
+      async function ensureSignedInUser() {
+        if (!client) throw new Error("Supabase is not configured.");
+        const { data, error } = await client.auth.getUser();
+        if (error) throw error;
+        if (!data.user) throw new Error("Log in before using Supabase data.");
+        currentUser = data.user;
+        return currentUser;
+      }
+
+      async function ensureProfile() {
+        const user = await ensureSignedInUser();
+        const row = toProfileRow(user);
+        const { data, error } = await client
+          .from("profiles")
+          .upsert(row, { onConflict: "id" })
+          .select()
+          .single();
+        if (error) throw error;
+        const profile = fromSnake(data);
+        cache.users = cache.users.filter(item => item.id !== profile.id).concat(profile);
+        return profile;
+      }
+
+      async function loadAccessibleData() {
+        const profile = await ensureProfile();
+        const { data: memberships, error: membershipsError } = await client
+          .from("trail_log_members")
+          .select("*")
+          .eq("user_id", profile.id);
+        if (membershipsError) throw membershipsError;
+
+        cache.trailLogMembers = (memberships || []).map(row => normalizeCachedMember(fromSnake(row)));
+        const trailLogIds = [...new Set(cache.trailLogMembers.map(member => member.trailLogId))];
+
+        if (!trailLogIds.length) {
+          cache.trailLogs = [];
+          cache.sightings = [];
+          cache.trails = [];
+          cache.notes = [];
+          cache.photos = [];
+          cache.users = [profile];
+          localStorage.removeItem(TRAIL_LOG_CONTEXT_STORAGE_KEY);
+          return;
+        }
+
+        const [trailLogsResult, allMembersResult, sightingsResult, trailsResult, notesResult, photosResult] = await Promise.all([
+          client.from("trail_logs").select("*").in("id", trailLogIds),
+          client.from("trail_log_members").select("*").in("trail_log_id", trailLogIds),
+          client.from("sightings").select("*").in("trail_log_id", trailLogIds),
+          client.from("trails").select("*").in("trail_log_id", trailLogIds),
+          client.from("notes").select("*").in("trail_log_id", trailLogIds),
+          client.from("photos").select("*").in("trail_log_id", trailLogIds)
+        ]);
+
+        [trailLogsResult, allMembersResult, sightingsResult, trailsResult, notesResult, photosResult].forEach(result => {
+          if (result.error) throw result.error;
+        });
+
+        cache.trailLogs = (trailLogsResult.data || []).map(fromSnake)
+          .sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt));
+        cache.trailLogMembers = (allMembersResult.data || []).map(row => normalizeCachedMember(fromSnake(row)));
+        cache.sightings = (sightingsResult.data || []).map(fromSnake);
+        cache.trails = (trailsResult.data || []).map(fromSnake);
+        cache.notes = (notesResult.data || []).map(fromSnake);
+        cache.photos = (photosResult.data || []).map(fromSnake);
+
+        const userIds = new Set([profile.id]);
+        cache.trailLogs.forEach(log => {
+          userIds.add(log.ownerUserId);
+          userIds.add(log.createdByUserId);
+        });
+        [...cache.trailLogMembers, ...cache.sightings, ...cache.trails, ...cache.notes, ...cache.photos].forEach(item => {
+          if (item.userId) userIds.add(item.userId);
+          if (item.createdByUserId) userIds.add(item.createdByUserId);
+        });
+
+        const { data: profiles, error: profilesError } = await client
+          .from("profiles")
+          .select("*")
+          .in("id", [...userIds]);
+        if (profilesError) throw profilesError;
+        cache.users = (profiles || []).map(fromSnake);
+        if (!cache.users.some(user => user.id === profile.id)) cache.users.push(profile);
+        ensureUniqueMemberAccentColors(cache);
+      }
+
+      function stripUndefined(row) {
+        return Object.fromEntries(Object.entries(row).filter(([, value]) => value !== undefined));
+      }
+
+      function createTableCrud(tableName, cacheKey, toRow) {
+        return {
+          async create(fields) {
+            const record = baseRecord({ id: createId(tableName.replace(/_/g, "-")), ...fields });
+            const { data, error } = await client
+              .from(tableName)
+              .insert(stripUndefined(toRow(record)))
+              .select()
+              .single();
+            if (error) throw error;
+            const saved = fromSnake(data);
+            cache[cacheKey].push(saved);
+            return cloneValue(saved);
+          },
+          async list(filter = {}) {
+            return cloneValue(cache[cacheKey].filter(item =>
+              Object.entries(filter).every(([key, value]) => item[key] === value)
+            ));
+          },
+          async get(id) {
+            const cached = cache[cacheKey].find(item => item.id === id);
+            if (cached) return cloneValue(cached);
+            const { data, error } = await client.from(tableName).select("*").eq("id", id).maybeSingle();
+            if (error) throw error;
+            return data ? cloneValue(fromSnake(data)) : null;
+          },
+          async update(id, updates) {
+            const { data, error } = await client
+              .from(tableName)
+              .update({ ...stripUndefined(toRow(updates)), updated_at: nowIso() })
+              .eq("id", id)
+              .select()
+              .single();
+            if (error) throw error;
+            const saved = fromSnake(data);
+            cache[cacheKey] = cache[cacheKey].map(item => item.id === id ? saved : item);
+            return cloneValue(saved);
+          },
+          async delete(id) {
+            const { error } = await client.from(tableName).delete().eq("id", id);
+            if (error) throw error;
+            cache[cacheKey] = cache[cacheKey].filter(item => item.id !== id);
+            return true;
+          }
+        };
+      }
+
+      const service = {
+        mode: "supabase",
+        client,
+        isBackendReady: Boolean(client),
+        defaultTrailLogId: "",
+        users: {
+          async list() {
+            return cloneValue(cache.users);
+          },
+          async get(id) {
+            return cloneValue(cache.users.find(user => user.id === id) || null);
+          }
+        },
+        trailLogs: createTableCrud("trail_logs", "trailLogs", toTrailLogRow),
+        trailLogMembers: createTableCrud("trail_log_members", "trailLogMembers", toMemberRow),
+        sightings: createTableCrud("sightings", "sightings", toSightingRow),
+        trails: createTableCrud("trails", "trails", toTrailRow),
+        notes: createTableCrud("notes", "notes", toNoteRow),
+        photos: createTableCrud("photos", "photos", toPhotoRow),
+        async initialize() {
+          try {
+            await loadAccessibleData();
+          } catch (error) {
+            handleError(error, "Supabase data could not be loaded.");
+          }
+        },
+        getCurrentUserId() {
+          return currentUser?.id || "";
+        },
+        setCurrentUserId(userId) {
+          return userId;
+        },
+        getCurrentUser() {
+          const userId = this.getCurrentUserId();
+          return cloneValue(cache.users.find(user => user.id === userId) || null);
+        },
+        listUsers() {
+          return cloneValue([...cache.users].sort((a, b) => (a.displayName || "").localeCompare(b.displayName || "")));
+        },
+        getActiveTrailLogId() {
+          return getActiveTrailLogIdFromCache();
+        },
+        setActiveTrailLogId(trailLogId) {
+          localStorage.setItem(TRAIL_LOG_CONTEXT_STORAGE_KEY, trailLogId);
+          return trailLogId;
+        },
+        getActiveTrailLog() {
+          const trailLogId = this.getActiveTrailLogId();
+          return cloneValue(cache.trailLogs.find(trailLog => trailLog.id === trailLogId) || null);
+        },
+        listTrailLogsForUser(userId = this.getCurrentUserId()) {
+          const memberTrailLogIds = new Set(
+            cache.trailLogMembers
+              .filter(member => member.userId === userId)
+              .map(member => member.trailLogId)
+          );
+          return cloneValue(cache.trailLogs
+            .filter(trailLog => memberTrailLogIds.has(trailLog.id))
+            .sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt)));
+        },
+        async createTrailLog(name) {
+          try {
+            const profile = await ensureProfile();
+            const timestamp = nowIso();
+            const trailLog = baseRecord({
+              id: createId("trail-log"),
+              createdAt: timestamp,
+              updatedAt: timestamp,
+              name,
+              ownerUserId: profile.id,
+              createdByUserId: profile.id,
+              visibility: "private"
+            });
+            const member = baseRecord({
+              id: createId("trail-log-member"),
+              trailLogId: trailLog.id,
+              userId: profile.id,
+              role: "owner",
+              ...OWNER_PERMISSIONS
+            });
+
+            const { error: trailLogError } = await client
+              .from("trail_logs")
+              .insert(toTrailLogRow(trailLog));
+            if (trailLogError) throw trailLogError;
+
+            const { data: insertedMember, error: memberError } = await client
+              .from("trail_log_members")
+              .insert(toMemberRow(member))
+              .select()
+              .single();
+            if (memberError) throw memberError;
+
+            const savedTrailLog = trailLog;
+            const savedMember = normalizeCachedMember(fromSnake(insertedMember));
+            cache.trailLogs.unshift(savedTrailLog);
+            cache.trailLogMembers.push(savedMember);
+            if (!cache.users.some(user => user.id === profile.id)) cache.users.push(profile);
+            this.setActiveTrailLogId(savedTrailLog.id);
+            return cloneValue(savedTrailLog);
+          } catch (error) {
+            handleError(error, "Trail Log could not be created.");
+            return null;
+          }
+        },
+        getMember(trailLogId = this.getActiveTrailLogId(), userId = this.getCurrentUserId()) {
+          const member = cache.trailLogMembers.find(item => item.trailLogId === trailLogId && item.userId === userId);
+          return member ? cloneValue(normalizeCachedMember(member)) : null;
+        },
+        getActiveMember() {
+          return this.getMember();
+        },
+        getActivePermissions() {
+          const trailLog = this.getActiveTrailLog();
+          const member = this.getActiveMember();
+          if (trailLog?.ownerUserId === this.getCurrentUserId() || member?.role === "owner") return cloneValue(OWNER_PERMISSIONS);
+          return cloneValue(member || READ_ONLY_PERMISSIONS);
+        },
+        canManageActiveTrailLog() {
+          const trailLog = this.getActiveTrailLog();
+          const member = this.getActiveMember();
+          return trailLog?.ownerUserId === this.getCurrentUserId() || member?.role === "owner";
+        },
+        listMembers(trailLogId = this.getActiveTrailLogId()) {
+          const usersById = getUsersById();
+          return cloneValue(cache.trailLogMembers
+            .filter(member => member.trailLogId === trailLogId)
+            .map(member => ({ ...normalizeCachedMember(member), user: usersById.get(member.userId) || null })));
+        },
+        listInvitableUsers(trailLogId = this.getActiveTrailLogId()) {
+          const memberUserIds = new Set(cache.trailLogMembers.filter(member => member.trailLogId === trailLogId).map(member => member.userId));
+          return cloneValue(cache.users.filter(user => !memberUserIds.has(user.id)));
+        },
+        async inviteUserToActiveTrailLog(userId) {
+          if (!this.canManageActiveTrailLog()) return null;
+          try {
+            const trailLogId = this.getActiveTrailLogId();
+            if (cache.trailLogMembers.some(member => member.trailLogId === trailLogId && member.userId === userId)) return null;
+            const member = baseRecord({
+              id: createId("trail-log-member"),
+              trailLogId,
+              userId,
+              role: "reader",
+              ...READ_ONLY_PERMISSIONS
+            });
+            const { data, error } = await client
+              .from("trail_log_members")
+              .insert(toMemberRow(member))
+              .select()
+              .single();
+            if (error) throw error;
+            const savedMember = normalizeCachedMember(fromSnake(data));
+            cache.trailLogMembers.push(savedMember);
+            ensureUniqueMemberAccentColors(cache);
+            return cloneValue(savedMember);
+          } catch (error) {
+            handleError(error, "User could not be invited.");
+            return null;
+          }
+        },
+        async updateMemberPermissions(memberId, permissions) {
+          if (!this.canManageActiveTrailLog()) return null;
+          try {
+            const member = cache.trailLogMembers.find(item => item.id === memberId && item.trailLogId === this.getActiveTrailLogId());
+            if (!member || member.role === "owner" || member.userId === this.getCurrentUserId()) return member ? cloneValue(normalizeCachedMember(member)) : null;
+            const updates = {
+              can_read: true,
+              can_write_spottings: permissions.canWriteSpottings ?? member.canWriteSpottings,
+              can_write_trails: permissions.canWriteTrails ?? member.canWriteTrails,
+              can_add_notes: permissions.canAddNotes ?? member.canAddNotes,
+              can_edit_own_inputs: permissions.canEditOwnInputs ?? member.canEditOwnInputs,
+              can_edit_others_inputs: permissions.canEditOthersInputs ?? member.canEditOthersInputs,
+              updated_at: nowIso()
+            };
+            const { data, error } = await client
+              .from("trail_log_members")
+              .update(updates)
+              .eq("id", memberId)
+              .select()
+              .single();
+            if (error) throw error;
+            const savedMember = normalizeCachedMember(fromSnake(data));
+            cache.trailLogMembers = cache.trailLogMembers.map(item => item.id === memberId ? savedMember : item);
+            return cloneValue(savedMember);
+          } catch (error) {
+            handleError(error, "Member permissions could not be updated.");
+            return null;
+          }
+        },
+        listSightingMarkers(trailLogId = this.getActiveTrailLogId()) {
+          const usersById = getUsersById();
+          return cache.sightings
+            .filter(sighting => sighting.trailLogId === trailLogId)
+            .map(sighting => {
+              const note = cache.notes.find(item => item.sightingId === sighting.id);
+              const photo = cache.photos.find(item => item.sightingId === sighting.id);
+              const creator = usersById.get(sighting.createdByUserId);
+              const noteCreator = note ? usersById.get(note.createdByUserId) : null;
+              const photoCreator = photo ? usersById.get(photo.createdByUserId) : null;
+              return {
+                id: sighting.id,
+                type: sighting.type,
+                note: note?.content || "",
+                noteCreatedByUserId: note?.createdByUserId || null,
+                noteCreatedByName: noteCreator?.displayName || "",
+                noteAccentColor: noteCreator?.accentColor || creator?.accentColor || USER_ACCENT_COLORS[0],
+                lat: sighting.latitude,
+                lng: sighting.longitude,
+                photo: photo?.dataUrl || "",
+                photoCreatedByUserId: photo?.createdByUserId || null,
+                photoCreatedByName: photoCreator?.displayName || "",
+                photoAccentColor: photoCreator?.accentColor || creator?.accentColor || USER_ACCENT_COLORS[0],
+                createdAt: Date.parse(sighting.createdAt),
+                updatedAt: Date.parse(sighting.updatedAt),
+                trailLogId: sighting.trailLogId,
+                createdByUserId: sighting.createdByUserId,
+                createdByName: creator?.displayName || "Unknown",
+                accentColor: creator?.accentColor || USER_ACCENT_COLORS[0]
+              };
+            });
+        },
+        async createSightingMarker({ type, note, lat, lng, photo }) {
+          if (!this.getActivePermissions().canWriteSpottings) return null;
+          try {
+            const trailLogId = this.getActiveTrailLogId();
+            const userId = this.getCurrentUserId();
+            const sighting = baseRecord({
+              id: createId("sighting"),
+              trailLogId,
+              createdByUserId: userId,
+              type,
+              latitude: lat,
+              longitude: lng
+            });
+            const { data: insertedSighting, error: sightingError } = await client
+              .from("sightings")
+              .insert(toSightingRow(sighting))
+              .select()
+              .single();
+            if (sightingError) throw sightingError;
+            const savedSighting = fromSnake(insertedSighting);
+            cache.sightings.push(savedSighting);
+
+            let savedNote = null;
+            if (note && this.getActivePermissions().canAddNotes) {
+              const noteRecord = baseRecord({
+                id: createId("note"),
+                trailLogId,
+                createdByUserId: userId,
+                sightingId: savedSighting.id,
+                trailId: null,
+                content: note
+              });
+              const { data: insertedNote, error: noteError } = await client
+                .from("notes")
+                .insert(toNoteRow(noteRecord))
+                .select()
+                .single();
+              if (noteError) throw noteError;
+              savedNote = fromSnake(insertedNote);
+              cache.notes.push(savedNote);
+            }
+
+            let savedPhoto = null;
+            if (photo && this.getActivePermissions().canAddNotes) {
+              const photoRecord = baseRecord({
+                id: createId("photo"),
+                trailLogId,
+                createdByUserId: userId,
+                sightingId: savedSighting.id,
+                trailId: null,
+                dataUrl: photo,
+                storagePath: "",
+                caption: ""
+              });
+              const { data: insertedPhoto, error: photoError } = await client
+                .from("photos")
+                .insert(toPhotoRow(photoRecord))
+                .select()
+                .single();
+              if (photoError) throw photoError;
+              savedPhoto = fromSnake(insertedPhoto);
+              cache.photos.push(savedPhoto);
+            }
+
+            const creator = this.getCurrentUser();
+            return {
+              id: savedSighting.id,
+              type: savedSighting.type,
+              note: savedNote?.content || "",
+              noteCreatedByUserId: savedNote?.createdByUserId || null,
+              noteCreatedByName: savedNote ? (creator?.displayName || "Unknown") : "",
+              noteAccentColor: creator?.accentColor || USER_ACCENT_COLORS[0],
+              lat: savedSighting.latitude,
+              lng: savedSighting.longitude,
+              photo: savedPhoto?.dataUrl || "",
+              photoCreatedByUserId: savedPhoto?.createdByUserId || null,
+              photoCreatedByName: savedPhoto ? (creator?.displayName || "Unknown") : "",
+              photoAccentColor: creator?.accentColor || USER_ACCENT_COLORS[0],
+              createdAt: Date.parse(savedSighting.createdAt),
+              updatedAt: Date.parse(savedSighting.updatedAt),
+              trailLogId: savedSighting.trailLogId,
+              createdByUserId: savedSighting.createdByUserId,
+              createdByName: creator?.displayName || "Unknown",
+              accentColor: creator?.accentColor || USER_ACCENT_COLORS[0]
+            };
+          } catch (error) {
+            handleError(error, "Sighting could not be saved.");
+            return null;
+          }
+        },
+        async deleteSightingMarker(id) {
+          try {
+            const trailLogId = this.getActiveTrailLogId();
+            const userId = this.getCurrentUserId();
+            const permissions = this.getActivePermissions();
+            const sighting = cache.sightings.find(item => item.id === id && item.trailLogId === trailLogId);
+            if (!sighting) return false;
+            if (!permissions.canEditOthersInputs && !(permissions.canEditOwnInputs && sighting.createdByUserId === userId)) return false;
+            const { error } = await client.from("sightings").delete().eq("id", id);
+            if (error) throw error;
+            cache.sightings = cache.sightings.filter(item => item.id !== id);
+            cache.notes = cache.notes.filter(item => item.sightingId !== id);
+            cache.photos = cache.photos.filter(item => item.sightingId !== id);
+            return true;
+          } catch (error) {
+            handleError(error, "Sighting could not be deleted.");
+            return false;
+          }
+        },
+        listTrailRoutes(trailLogId = this.getActiveTrailLogId()) {
+          const usersById = getUsersById();
+          return cloneValue(cache.trails
+            .filter(trail => trail.trailLogId === trailLogId)
+            .map(trail => {
+              const creator = usersById.get(trail.createdByUserId);
+              return {
+                ...trail,
+                createdByName: creator?.displayName || "Unknown",
+                accentColor: creator?.accentColor || USER_ACCENT_COLORS[0]
+              };
+            })
+            .sort((a, b) => Date.parse(b.date || b.createdAt) - Date.parse(a.date || a.createdAt)));
+        },
+        async createTrailRoute(fields) {
+          if (!this.getActivePermissions().canWriteTrails) return null;
+          try {
+            const trail = baseRecord({
+              id: createId("trail"),
+              trailLogId: this.getActiveTrailLogId(),
+              createdByUserId: this.getCurrentUserId(),
+              ...fields
+            });
+            const { data, error } = await client
+              .from("trails")
+              .insert(toTrailRow(trail))
+              .select()
+              .single();
+            if (error) throw error;
+            const savedTrail = fromSnake(data);
+            cache.trails.push(savedTrail);
+            const creator = this.getCurrentUser();
+            return {
+              ...savedTrail,
+              createdByName: creator?.displayName || "Unknown",
+              accentColor: creator?.accentColor || USER_ACCENT_COLORS[0]
+            };
+          } catch (error) {
+            handleError(error, "Trail could not be saved.");
+            return null;
+          }
+        },
+        async refresh() {
+          await loadAccessibleData();
+        }
+      };
+
+      service.trailLogs.create = async fields => service.createTrailLog(fields.name || "New Trail Log");
+      return service;
+    }
+
+    function createTrailItDataRepository(dataMode) {
+      if (dataMode === "supabase") {
+        return createSupabaseTrailItRepository({
+          client: SUPABASE_CLIENT,
+          fallbackRepository: LocalMockTrailItRepository
+        });
+      }
+
+      return {
+        ...LocalMockTrailItRepository,
+        mode: "mock",
+        isBackendReady: false
+      };
+    }
+
+    const TrailItData = createTrailItDataRepository(TRAILIT_DATA_MODE);
+    window.TrailItRuntime.repository = {
+      mode: TrailItData.mode,
+      isBackendReady: TrailItData.isBackendReady
+    };
+
+    const TrailItAuth = (() => {
+      const isSupabaseMode = TRAILIT_DATA_MODE === "supabase";
+      let currentUser = null;
+      let authSubscription = null;
+
+      function toPublicUser(user) {
+        if (!user) return null;
+        return {
+          id: user.id,
+          email: user.email || "",
+          displayName: user.user_metadata?.display_name || user.email || "TrailIt user"
+        };
+      }
+
+      function setCurrentUser(user) {
+        currentUser = toPublicUser(user);
+        window.TrailItRuntime.auth.user = currentUser;
+        return currentUser;
+      }
+
+      return {
+        isSupabaseMode,
+        getCurrentUser() {
+          return currentUser;
+        },
+        async initialize(onAuthChange) {
+          if (!isSupabaseMode) return setCurrentUser(null);
+          if (!SUPABASE_CLIENT) return setCurrentUser(null);
+
+          const { data, error } = await SUPABASE_CLIENT.auth.getSession();
+          if (error) throw error;
+          setCurrentUser(data.session?.user || null);
+
+          const { data: listener } = SUPABASE_CLIENT.auth.onAuthStateChange((_event, session) => {
+            const user = setCurrentUser(session?.user || null);
+            if (onAuthChange) onAuthChange(user);
+          });
+          authSubscription = listener?.subscription || null;
+          return currentUser;
+        },
+        async signIn(email, password) {
+          if (!SUPABASE_CLIENT) throw new Error("Supabase is not configured.");
+          const { data, error } = await SUPABASE_CLIENT.auth.signInWithPassword({ email, password });
+          if (error) throw error;
+          return setCurrentUser(data.user || data.session?.user || null);
+        },
+        async signUp(email, password) {
+          if (!SUPABASE_CLIENT) throw new Error("Supabase is not configured.");
+          const { data, error } = await SUPABASE_CLIENT.auth.signUp({ email, password });
+          if (error) throw error;
+          return setCurrentUser(data.user || data.session?.user || null);
+        },
+        async signOut() {
+          if (!SUPABASE_CLIENT) return setCurrentUser(null);
+          const { error } = await SUPABASE_CLIENT.auth.signOut();
+          if (error) throw error;
+          return setCurrentUser(null);
+        },
+        dispose() {
+          authSubscription?.unsubscribe();
+        }
+      };
+    })();
+
+    const state = {
+      markers: [],
+      markerLayers: new Map(),
+      pendingLatLng: null,
+      selectedType: "Deer",
+      pendingPhoto: "",
+      userLayer: null,
+      accuracyLayer: null,
+      userLatLng: null,
+      watchId: null,
+      savedTrails: [],
+      trailLogs: [],
+      activeTrailLogId: null,
+      activeTrailLog: null,
+      currentUser: null,
+      currentUserId: null,
+      authMode: "login",
+      authUser: null,
+      appStarted: false,
+      permissions: { ...READ_ONLY_PERMISSIONS },
+      canManageMembers: false,
+      trailLayer: null,
+      activeTrail: null,
+      pendingTrail: null,
+      trailTimerId: null,
+      lastStepAt: 0,
+      ignoreMapClicksUntil: 0
+    };
+
+    const map = L.map("map", {
+      zoomControl: false,
+      preferCanvas: true
+    }).setView(DEFAULT_CENTER, 6);
+
+    L.control.zoom({ position: "bottomright" }).addTo(map);
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      maxZoom: 19,
+      attribution: "© OpenStreetMap contributors"
+    }).addTo(map);
+    const els = {
+      appShell: document.querySelector(".app-shell"),
+      bottomBar: document.querySelector(".bottom-bar"),
+      statusPill: document.getElementById("statusPill"),
+      statusText: document.getElementById("statusText"),
+      markerSummary: document.getElementById("markerSummary"),
+      locateBtn: document.getElementById("locateBtn"),
+      trailActionBtn: document.getElementById("trailActionBtn"),
+      trailLogsOpenBtn: document.getElementById("trailLogsOpenBtn"),
+      userSwitchSelect: document.getElementById("userSwitchSelect"),
+      logoutBtn: document.getElementById("logoutBtn"),
+      dataModeSelect: document.getElementById("dataModeSelect"),
+      authScreen: document.getElementById("authScreen"),
+      authTitle: document.getElementById("authTitle"),
+      authHelpText: document.getElementById("authHelpText"),
+      loginTabBtn: document.getElementById("loginTabBtn"),
+      signupTabBtn: document.getElementById("signupTabBtn"),
+      authForm: document.getElementById("authForm"),
+      authEmailInput: document.getElementById("authEmailInput"),
+      authPasswordInput: document.getElementById("authPasswordInput"),
+      authSubmitBtn: document.getElementById("authSubmitBtn"),
+      authMessage: document.getElementById("authMessage"),
+      authMockModeBtn: document.getElementById("authMockModeBtn"),
+      trailLogScreen: document.getElementById("trailLogScreen"),
+      trailLogList: document.getElementById("trailLogList"),
+      trailLogForm: document.getElementById("trailLogForm"),
+      trailLogNameInput: document.getElementById("trailLogNameInput"),
+      currentUserText: document.getElementById("currentUserText"),
+      membersPanel: document.getElementById("membersPanel"),
+      memberList: document.getElementById("memberList"),
+      inviteRow: document.getElementById("inviteRow"),
+      inviteUserSelect: document.getElementById("inviteUserSelect"),
+      inviteUserBtn: document.getElementById("inviteUserBtn"),
+      memberHelpText: document.getElementById("memberHelpText"),
+      closeTrailLogScreenBtn: document.getElementById("closeTrailLogScreenBtn"),
+      recentBtn: document.getElementById("recentBtn"),
+      trailsBtn: document.getElementById("trailsBtn"),
+      mapBtn: document.getElementById("mapBtn"),
+      addHereBtn: document.getElementById("addHereBtn"),
+      recentPanel: document.getElementById("recentPanel"),
+      trailsPanel: document.getElementById("trailsPanel"),
+      recentList: document.getElementById("recentList"),
+      trailList: document.getElementById("trailList"),
+      findCount: document.getElementById("findCount"),
+      trailCount: document.getElementById("trailCount"),
+      totalStat: document.getElementById("totalStat"),
+      typeStat: document.getElementById("typeStat"),
+      todayStat: document.getElementById("todayStat"),
+      trailTotalStat: document.getElementById("trailTotalStat"),
+      trailMilesStat: document.getElementById("trailMilesStat"),
+      trailStepsStat: document.getElementById("trailStepsStat"),
+      trailLiveCard: document.getElementById("trailLiveCard"),
+      liveDistance: document.getElementById("liveDistance"),
+      liveSteps: document.getElementById("liveSteps"),
+      liveDuration: document.getElementById("liveDuration"),
+      saveTrailModal: document.getElementById("saveTrailModal"),
+      trailNameInput: document.getElementById("trailNameInput"),
+      saveDistance: document.getElementById("saveDistance"),
+      saveSteps: document.getElementById("saveSteps"),
+      saveDuration: document.getElementById("saveDuration"),
+      saveRouteSummary: document.getElementById("saveRouteSummary"),
+      discardTrailBtn: document.getElementById("discardTrailBtn"),
+      saveTrailBtn: document.getElementById("saveTrailBtn"),
+      drawer: document.getElementById("logDrawer"),
+      drawerScrim: document.getElementById("drawerScrim"),
+      closeDrawerBtn: document.getElementById("closeDrawerBtn"),
+      cancelBtn: document.getElementById("cancelBtn"),
+      saveBtn: document.getElementById("saveBtn"),
+      markerGrid: document.getElementById("markerGrid"),
+      noteInput: document.getElementById("noteInput"),
+      photoBtn: document.getElementById("photoBtn"),
+      photoInput: document.getElementById("photoInput"),
+      photoPreview: document.getElementById("photoPreview"),
+      photoPreviewImage: document.getElementById("photoPreviewImage"),
+      photoPreviewText: document.getElementById("photoPreviewText"),
+      coordText: document.getElementById("coordText"),
+      mapHint: document.getElementById("mapHint")
+    };
+
+    els.locateBtn.innerHTML = '<svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke-width="2"><circle cx="12" cy="12" r="3"></circle><path d="M12 2v3M12 19v3M2 12h3M19 12h3"></path><path d="M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M18.4 5.6l-2.1 2.1M7.7 16.3l-2.1 2.1"></path></svg>';
+
+    function invalidateMapLayout(delay = 240) {
+      window.requestAnimationFrame(() => map.invalidateSize());
+      window.setTimeout(() => map.invalidateSize(), delay);
+    }
+
+    function isDesktopLayout() {
+      return window.matchMedia("(min-width: 768px)").matches;
+    }
+
+    function syncResponsiveLayout() {
+      invalidateMapLayout();
+    }
+
+    invalidateMapLayout(500);
+    window.addEventListener("resize", syncResponsiveLayout);
+    window.addEventListener("orientationchange", () => invalidateMapLayout(500));
+
+    [els.appShell, els.bottomBar, els.recentPanel, els.trailsPanel, els.saveTrailModal, els.trailLogScreen, els.authScreen, els.drawer, els.drawerScrim].forEach(element => {
+      L.DomEvent.disableClickPropagation(element);
+      L.DomEvent.disableScrollPropagation(element);
+      ["pointerdown", "mousedown", "touchstart"].forEach(eventName => {
+        element.addEventListener(eventName, () => guardMapTap(), { capture: true, passive: true });
+      });
+    });
+
+    function showStatus(message, persist = false) {
+      els.statusText.textContent = message;
+      els.statusPill.classList.add("visible");
+      if (!persist) {
+        window.clearTimeout(showStatus.timer);
+        showStatus.timer = window.setTimeout(() => {
+          els.statusPill.classList.remove("visible");
+        }, 3600);
+      }
+    }
+
+    function guardMapTap(duration = 1200) {
+      state.ignoreMapClicksUntil = Date.now() + duration;
+    }
+
+    function getTypeSvg(type) {
+      return types[type]?.svg || types.Other.svg;
+    }
+
+    function makeMarkerIcon(marker) {
+      const config = types[marker.type] || types.Other;
+      const accentColor = marker.accentColor || USER_ACCENT_COLORS[0];
+      return L.divIcon({
+        className: "",
+        html: `<div class="trail-marker" style="background:${config.color}; border-color:${accentColor}; box-shadow:0 0 0 4px ${accentColor}33, 0 9px 20px rgba(0,0,0,0.42)">${config.svg}</div>`,
+        iconSize: [38, 38],
+        iconAnchor: [8, 36],
+        popupAnchor: [10, -32]
+      });
+    }
+
+    function makeUserIcon() {
+      return L.divIcon({
+        className: "",
+        html: '<div class="user-dot"></div>',
+        iconSize: [22, 22],
+        iconAnchor: [11, 11]
+      });
+    }
+
+    function createId(prefix) {
+      if (crypto.randomUUID) return `${prefix}-${crypto.randomUUID()}`;
+      return `${prefix}-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    }
+
+    function toRouteCoordinate(position) {
+      return {
+        latitude: position.coords.latitude,
+        longitude: position.coords.longitude,
+        accuracy: Number.isFinite(position.coords.accuracy) ? position.coords.accuracy : null,
+        timestamp: new Date(position.timestamp).toISOString()
+      };
+    }
+
+    function distanceMeters(a, b) {
+      const radiusMeters = 6371000;
+      const lat1 = a.latitude * Math.PI / 180;
+      const lat2 = b.latitude * Math.PI / 180;
+      const deltaLat = (b.latitude - a.latitude) * Math.PI / 180;
+      const deltaLon = (b.longitude - a.longitude) * Math.PI / 180;
+      const h = Math.sin(deltaLat / 2) ** 2 +
+        Math.cos(lat1) * Math.cos(lat2) * Math.sin(deltaLon / 2) ** 2;
+      return radiusMeters * 2 * Math.atan2(Math.sqrt(h), Math.sqrt(1 - h));
+    }
+
+    function formatDuration(totalSeconds) {
+      const hours = Math.floor(totalSeconds / 3600);
+      const minutes = Math.floor((totalSeconds % 3600) / 60);
+      const seconds = totalSeconds % 60;
+      if (hours > 0) {
+        return `${hours}:${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+      }
+      return `${minutes}:${String(seconds).padStart(2, "0")}`;
+    }
+
+    function estimateSteps(distanceMetersValue) {
+      return Math.round(distanceMetersValue / STEP_STRIDE_METERS);
+    }
+
+    function getTrailStats() {
+      if (!state.activeTrail) {
+        return { distanceMiles: 0, steps: 0, durationSeconds: 0 };
+      }
+      const distanceMiles = state.activeTrail.distanceMeters / METERS_PER_MILE;
+      return {
+        distanceMiles,
+        steps: Math.max(state.activeTrail.detectedSteps, estimateSteps(state.activeTrail.distanceMeters)),
+        durationSeconds: Math.max(0, Math.floor((Date.now() - Date.parse(state.activeTrail.startTime)) / 1000))
+      };
+    }
+
+    function formatTime(timestamp) {
+      return new Intl.DateTimeFormat(undefined, {
+        month: "short",
+        day: "numeric",
+        hour: "2-digit",
+        minute: "2-digit"
+      }).format(new Date(timestamp));
+    }
+
+    function escapeHtml(value) {
+      return String(value || "").replace(/[&<>"']/g, char => ({
+        "&": "&amp;",
+        "<": "&lt;",
+        ">": "&gt;",
+        '"': "&quot;",
+        "'": "&#039;"
+      }[char]));
+    }
+
+    function popupHtml(marker) {
+      const note = marker.note ? escapeHtml(marker.note) : "No notes added.";
+      const noteCredit = marker.note
+        ? `<span class="note-credit"><span class="accent-dot" style="background:${marker.noteAccentColor || marker.accentColor}"></span> Note by ${escapeHtml(marker.noteCreatedByName || marker.createdByName)}</span>`
+        : "";
+      const photo = marker.photo ? `<img class="popup-photo" src="${marker.photo}" alt="${escapeHtml(marker.type)} photo">` : "";
+      const photoCredit = marker.photo
+        ? `<span class="photo-credit"><span class="accent-dot" style="background:${marker.photoAccentColor || marker.accentColor}"></span> Photo by ${escapeHtml(marker.photoCreatedByName || marker.createdByName)}</span>`
+        : "";
+      const deleteButton = canEditMarker(marker)
+        ? `<button class="popup-delete" type="button" data-delete-id="${marker.id}">Delete marker</button>`
+        : "";
+
+      return `
+        <div class="popup-card">
+          <strong>${marker.type}</strong>
+          <span class="created-by"><span class="accent-dot" style="background:${marker.accentColor}"></span>Added by ${escapeHtml(marker.createdByName)}</span>
+          <small>${formatTime(marker.createdAt)}</small>
+          <p>${note}</p>
+          ${noteCredit}
+          ${photo}
+          ${photoCredit}
+          <small>${marker.lat.toFixed(5)}, ${marker.lng.toFixed(5)}</small>
+          ${deleteButton}
+        </div>
+      `;
+    }
+
+    function addMarkerLayer(marker) {
+      const layer = L.marker([marker.lat, marker.lng], {
+        icon: makeMarkerIcon(marker),
+        title: marker.type
+      }).addTo(map);
+
+      layer.bindPopup(popupHtml(marker));
+      state.markerLayers.set(marker.id, layer);
+    }
+
+    function renderMarkers() {
+      state.markerLayers.forEach(layer => layer.remove());
+      state.markerLayers.clear();
+      state.markers.forEach(addMarkerLayer);
+      renderRecent();
+    }
+
+    async function renderTrailLogs() {
+      state.trailLogs = await TrailItData.listTrailLogsForUser();
+      if (!state.trailLogs.length) {
+        els.trailLogList.innerHTML = '<div class="empty-state">No Trail Logs yet. Create one to start logging.</div>';
+        return;
+      }
+
+      const usersById = new Map((await TrailItData.listUsers()).map(user => [user.id, user]));
+      els.trailLogList.innerHTML = state.trailLogs.map(trailLog => `
+        <button class="trail-log-row" type="button" data-open-trail-log-id="${trailLog.id}">
+          <strong>${escapeHtml(trailLog.name)}</strong>
+          <time>Created ${formatTime(Date.parse(trailLog.createdAt))} by ${escapeHtml(usersById.get(trailLog.createdByUserId)?.displayName || "Unknown")}</time>
+        </button>
+      `).join("");
+    }
+
+    async function renderUserSwitcher() {
+      const users = await TrailItData.listUsers();
+      state.currentUserId = await TrailItData.getCurrentUserId();
+      state.currentUser = await TrailItData.getCurrentUser();
+      els.userSwitchSelect.style.display = TrailItAuth.isSupabaseMode ? "none" : "";
+      els.userSwitchSelect.innerHTML = users.map(user => `
+        <option value="${user.id}" ${user.id === state.currentUserId ? "selected" : ""}>${escapeHtml(user.displayName)}</option>
+      `).join("");
+      els.logoutBtn.classList.toggle("visible", Boolean(TrailItAuth.isSupabaseMode && state.authUser));
+      els.currentUserText.textContent = TrailItAuth.isSupabaseMode
+        ? `Signed in as ${state.authUser?.email || state.authUser?.displayName || "TrailIt user"}`
+        : `Signed in locally as ${state.currentUser?.displayName || "Unknown"}`;
+    }
+
+    function renderDataModeSwitcher() {
+      els.dataModeSelect.value = TRAILIT_DATA_MODE;
+      els.dataModeSelect.classList.toggle("visible", Boolean(SUPABASE_SETUP.isDevToggleEnabled));
+      els.authMockModeBtn.style.display = SUPABASE_SETUP.isDevToggleEnabled ? "" : "none";
+      els.dataModeSelect.title = TrailItData.mode === "supabase" && !TrailItData.isBackendReady
+        ? "Supabase mode selected; using mock fallback until credentials and repository writes are ready."
+        : "Development data mode";
+    }
+
+    function setAuthMode(mode) {
+      state.authMode = mode === "signup" ? "signup" : "login";
+      const isSignup = state.authMode === "signup";
+      els.authTitle.textContent = isSignup ? "Create your TrailIt account" : "Log in to Trail it";
+      els.authHelpText.textContent = isSignup
+        ? "Create an account to use Supabase-backed TrailIt sessions."
+        : "Use your TrailIt account to continue.";
+      els.authSubmitBtn.textContent = isSignup ? "Sign up" : "Login";
+      els.loginTabBtn.classList.toggle("active", !isSignup);
+      els.signupTabBtn.classList.toggle("active", isSignup);
+      els.authPasswordInput.autocomplete = isSignup ? "new-password" : "current-password";
+      els.authMessage.textContent = "";
+    }
+
+    function showAuthScreen(message = "") {
+      els.authScreen.classList.add("open");
+      els.authMessage.textContent = message;
+      closePanels();
+      closeDrawer();
+      els.saveTrailModal.classList.remove("open");
+      setTimeout(() => els.authEmailInput.focus({ preventScroll: true }), 80);
+    }
+
+    function hideAuthScreen() {
+      els.authScreen.classList.remove("open");
+      els.authMessage.textContent = "";
+    }
+
+    function renderAuthState() {
+      state.authUser = TrailItAuth.getCurrentUser();
+      if (!TrailItAuth.isSupabaseMode) {
+        hideAuthScreen();
+        els.logoutBtn.classList.remove("visible");
+        els.userSwitchSelect.style.display = "";
+        return;
+      }
+
+      els.userSwitchSelect.style.display = "none";
+      els.logoutBtn.classList.toggle("visible", Boolean(state.authUser));
+      if (state.authUser) {
+        hideAuthScreen();
+        if (state.appStarted) renderUserSwitcher();
+      } else {
+        showAuthScreen(SUPABASE_CLIENT ? "" : "Supabase credentials are required for login.");
+      }
+    }
+
+    function canEditMarker(marker) {
+      if (state.permissions.canEditOthersInputs) return true;
+      return state.permissions.canEditOwnInputs && marker.createdByUserId === state.currentUserId;
+    }
+
+    function syncPermissionUi() {
+      const canWriteSpottings = state.permissions.canWriteSpottings;
+      const canWriteTrails = state.permissions.canWriteTrails;
+      const canAddNotes = state.permissions.canAddNotes;
+      els.addHereBtn.disabled = !canWriteSpottings;
+      els.saveBtn.disabled = !canWriteSpottings;
+      els.trailActionBtn.disabled = !canWriteTrails && !state.activeTrail;
+      els.saveTrailBtn.disabled = !canWriteTrails;
+      els.noteInput.disabled = !canAddNotes;
+      els.noteInput.placeholder = canAddNotes
+        ? "Describe tracks, movement, weather, direction, behaviour..."
+        : "Notes are read-only for your access.";
+      els.photoBtn.disabled = !canAddNotes;
+    }
+
+    async function renderMembers() {
+      const members = await TrailItData.listMembers();
+      const canManage = await TrailItData.canManageActiveTrailLog();
+      const permissionLabels = [
+        ["canWriteSpottings", "Write sightings"],
+        ["canWriteTrails", "Write trails"],
+        ["canAddNotes", "Add notes"],
+        ["canEditOwnInputs", "Edit own"],
+        ["canEditOthersInputs", "Edit others"]
+      ];
+
+      els.memberList.innerHTML = members.map(member => {
+        const isOwner = member.role === "owner";
+        const disabled = !canManage || isOwner || member.userId === state.currentUserId;
+        const roleLabel = isOwner
+          ? "Owner"
+          : (member.canWriteSpottings || member.canWriteTrails || member.canAddNotes ? "Contributor" : "Read-only");
+        const permissionControls = permissionLabels.map(([key, label]) => `
+          <label>
+            <input type="checkbox" data-member-id="${member.id}" data-permission="${key}" ${member[key] ? "checked" : ""} ${disabled ? "disabled" : ""}>
+            ${label}
+          </label>
+        `).join("");
+
+        return `
+          <div class="member-row ${member.userId === state.currentUserId ? "current-user" : ""}">
+            <div class="member-title">
+              <span class="member-name">
+                <span class="member-dot" style="background:${member.user?.accentColor || "#7f9f5d"}"></span>
+                ${escapeHtml(member.user?.displayName || "Unknown user")}
+              </span>
+              <span class="count-chip">${roleLabel}${member.userId === state.currentUserId ? " - You" : ""}</span>
+            </div>
+            <div class="permission-grid">
+              <label><input type="checkbox" checked disabled> Read</label>
+              ${permissionControls}
+            </div>
+          </div>
+        `;
+      }).join("");
+
+      const invitableUsers = await TrailItData.listInvitableUsers();
+      els.inviteRow.style.display = canManage ? "flex" : "none";
+      els.inviteUserSelect.innerHTML = invitableUsers.length
+        ? invitableUsers.map(user => `<option value="${user.id}">${escapeHtml(user.displayName)}</option>`).join("")
+        : '<option value="">No users to invite</option>';
+      els.inviteUserBtn.disabled = !canManage || invitableUsers.length === 0;
+      els.memberHelpText.textContent = canManage
+        ? "Invited users join read-only. Owners keep full access."
+        : "Only the owner can manage members.";
+    }
+
+    async function refreshActiveTrailLogData() {
+      state.currentUserId = await TrailItData.getCurrentUserId();
+      state.currentUser = await TrailItData.getCurrentUser();
+      state.activeTrailLogId = await TrailItData.getActiveTrailLogId();
+      state.activeTrailLog = await TrailItData.getActiveTrailLog();
+      state.permissions = await TrailItData.getActivePermissions();
+      state.canManageMembers = await TrailItData.canManageActiveTrailLog();
+      state.markers = await TrailItData.listSightingMarkers(state.activeTrailLogId);
+      state.savedTrails = await TrailItData.listTrailRoutes(state.activeTrailLogId);
+      if (state.trailLayer) {
+        state.trailLayer.remove();
+        state.trailLayer = null;
+      }
+      renderMarkers();
+      renderTrails();
+      await renderMembers();
+      syncPermissionUi();
+      els.markerSummary.textContent = state.activeTrailLog?.name || "Private field journal";
+    }
+
+    async function openTrailLogScreen() {
+      await renderTrailLogs();
+      els.trailLogScreen.classList.add("open");
+      closeDrawer();
+      closePanels();
+    }
+
+    function closeTrailLogScreen() {
+      if (!state.activeTrailLogId) return;
+      els.trailLogScreen.classList.remove("open");
+      invalidateMapLayout();
+    }
+
+    async function openTrailLog(trailLogId) {
+      await TrailItData.setActiveTrailLogId(trailLogId);
+      await refreshActiveTrailLogData();
+      closeTrailLogScreen();
+      showStatus(`${state.activeTrailLog?.name || "Trail Log"} opened.`);
+    }
+
+    async function createTrailLog(event) {
+      event.preventDefault();
+      const name = els.trailLogNameInput.value.trim();
+      if (!name) {
+        showStatus("Name the Trail Log before creating it.", true);
+        return;
+      }
+
+      const trailLog = await TrailItData.createTrailLog(name);
+      if (!trailLog) return;
+      els.trailLogNameInput.value = "";
+      await renderTrailLogs();
+      await openTrailLog(trailLog.id);
+    }
+
+    async function switchUser(userId) {
+      await TrailItData.setCurrentUserId(userId);
+      await renderUserSwitcher();
+      await renderTrailLogs();
+      await refreshActiveTrailLogData();
+      showStatus(`Switched to ${state.currentUser?.displayName || "user"}.`);
+    }
+
+    function switchDataMode(mode) {
+      const nextMode = window.TrailItSupabase?.setDataMode(mode) || "mock";
+      showStatus(`Switching TrailIt to ${nextMode} mode...`, true);
+      window.setTimeout(() => window.location.reload(), 120);
+    }
+
+    async function submitAuth(event) {
+      event.preventDefault();
+      const email = els.authEmailInput.value.trim();
+      const password = els.authPasswordInput.value;
+      if (!email || !password) {
+        els.authMessage.textContent = "Enter an email and password.";
+        return;
+      }
+
+      els.authSubmitBtn.disabled = true;
+      els.authMessage.textContent = state.authMode === "signup" ? "Creating account..." : "Logging in...";
+      try {
+        const user = state.authMode === "signup"
+          ? await TrailItAuth.signUp(email, password)
+          : await TrailItAuth.signIn(email, password);
+        state.authUser = user;
+        if (user) {
+          hideAuthScreen();
+          await finishAppStart();
+          await renderUserSwitcher();
+          showStatus(`Signed in as ${user.email || user.displayName}.`);
+        } else {
+          els.authMessage.textContent = "Check your email to confirm your account, then log in.";
+        }
+      } catch (error) {
+        els.authMessage.textContent = error.message || "Account action failed.";
+      } finally {
+        els.authSubmitBtn.disabled = false;
+      }
+    }
+
+    async function logout() {
+      try {
+        await TrailItAuth.signOut();
+        state.authUser = null;
+        showAuthScreen("Logged out.");
+        showStatus("Logged out.");
+      } catch (error) {
+        showStatus(error.message || "Could not log out.", true);
+      }
+    }
+
+    async function inviteSelectedUser() {
+      const userId = els.inviteUserSelect.value;
+      if (!userId) return;
+      const member = await TrailItData.inviteUserToActiveTrailLog(userId);
+      if (!member) {
+        showStatus("Only the owner can invite members.", true);
+        return;
+      }
+      await renderMembers();
+      showStatus("User invited as read-only.");
+    }
+
+    async function updateMemberPermission(event) {
+      const checkbox = event.target.closest("[data-member-id][data-permission]");
+      if (!checkbox) return;
+      const memberId = checkbox.dataset.memberId;
+      const permission = checkbox.dataset.permission;
+      const updated = await TrailItData.updateMemberPermissions(memberId, { [permission]: checkbox.checked });
+      if (!updated) {
+        checkbox.checked = !checkbox.checked;
+        showStatus("Only the owner can manage member permissions.", true);
+        return;
+      }
+      await renderMembers();
+      if (updated.userId === state.currentUserId) {
+        await refreshActiveTrailLogData();
+      }
+    }
+
+    function renderRecent() {
+      const sorted = [...state.markers].sort((a, b) => b.createdAt - a.createdAt);
+      const today = new Date();
+      const dayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime();
+      const savedTypes = new Set(state.markers.map(marker => marker.type));
+      els.findCount.textContent = `${state.markers.length} saved`;
+      els.totalStat.textContent = state.markers.length;
+      els.typeStat.textContent = savedTypes.size;
+      els.todayStat.textContent = state.markers.filter(marker => marker.createdAt >= dayStart).length;
+      els.markerSummary.textContent = state.activeTrailLog?.name || (state.markers.length ? `${state.markers.length} private finds saved` : "Private field journal");
+
+      if (!sorted.length) {
+        els.recentList.innerHTML = '<div class="empty-state">Nothing logged yet. Tap the map or Add Here to save your first find.</div>';
+        return;
+      }
+
+      els.recentList.innerHTML = sorted.slice(0, 12).map(marker => `
+        <button class="find-row" type="button" data-focus-id="${marker.id}">
+          <span class="find-icon" style="color:${types[marker.type]?.color || types.Other.color}; border-color:${marker.accentColor || USER_ACCENT_COLORS[0]}">${getTypeSvg(marker.type)}</span>
+          <span>
+            <strong>${marker.type}</strong>
+            <small>${marker.note || "No notes added"}</small>
+            <span class="created-by"><span class="accent-dot" style="background:${marker.accentColor || USER_ACCENT_COLORS[0]}"></span>Added by ${escapeHtml(marker.createdByName || "Unknown")}</span>
+          </span>
+          <time>${formatTime(marker.createdAt)}</time>
+        </button>
+      `).join("");
+    }
+
+    function renderTrailStats() {
+      const totalMiles = state.savedTrails.reduce((sum, trail) => sum + Number(trail.distanceMiles || 0), 0);
+      const totalSteps = state.savedTrails.reduce((sum, trail) => sum + Number(trail.steps || 0), 0);
+      els.trailCount.textContent = `${state.savedTrails.length} saved`;
+      els.trailTotalStat.textContent = state.savedTrails.length;
+      els.trailMilesStat.textContent = totalMiles.toFixed(2);
+      els.trailStepsStat.textContent = totalSteps;
+    }
+
+    function renderTrails() {
+      renderTrailStats();
+      if (!state.savedTrails.length) {
+        els.trailList.innerHTML = '<div class="empty-state">No saved trails yet. Tap Start Trail before your next walk.</div>';
+        return;
+      }
+
+      els.trailList.innerHTML = state.savedTrails.map(trail => `
+        <button class="trail-row" type="button" data-trail-id="${trail.id}" style="border-left:4px solid ${trail.accentColor || USER_ACCENT_COLORS[0]}">
+          <span>
+            <strong>${escapeHtml(trail.name)}</strong>
+            <span class="created-by"><span class="accent-dot" style="background:${trail.accentColor || USER_ACCENT_COLORS[0]}"></span>Added by ${escapeHtml(trail.createdByName || "Unknown")}</span>
+            <small>${Number(trail.distanceMiles || 0).toFixed(2)} mi · ${trail.steps || 0} steps · ${formatDuration(trail.durationSeconds || 0)}</small>
+          </span>
+          <time>${formatTime(Date.parse(trail.date || trail.endTime || Date.now()))}</time>
+        </button>
+      `).join("");
+    }
+
+    function updateLiveTrailStats() {
+      if (!state.activeTrail) return;
+      const stats = getTrailStats();
+      els.liveDistance.textContent = stats.distanceMiles.toFixed(2);
+      els.liveSteps.textContent = stats.steps;
+      els.liveDuration.textContent = formatDuration(stats.durationSeconds);
+    }
+
+    function drawTrailRoute(trail) {
+      if (state.trailLayer) {
+        state.trailLayer.remove();
+        state.trailLayer = null;
+      }
+
+      const route = (trail.routeCoordinates || []).map(point => [point.latitude, point.longitude]);
+      if (route.length < 2) {
+        showStatus("This trail has too few route points to draw.");
+        return;
+      }
+
+      state.trailLayer = L.polyline(route, {
+        color: trail.accentColor || USER_ACCENT_COLORS[0],
+        weight: 5,
+        opacity: 0.88
+      }).addTo(map);
+      map.fitBounds(state.trailLayer.getBounds(), { padding: [36, 36] });
+      els.trailsPanel.classList.remove("open");
+      setNavActive("map");
+      invalidateMapLayout();
+    }
+
+    function closePanels() {
+      els.recentPanel.classList.remove("open");
+      els.trailsPanel.classList.remove("open");
+    }
+
+    function buildTypeGrid() {
+      els.markerGrid.innerHTML = Object.keys(types).map(type => `
+        <button class="marker-option ${type === state.selectedType ? "selected" : ""}" type="button" data-type="${type}">
+          ${getTypeSvg(type)}
+          <span>${type}</span>
+        </button>
+      `).join("");
+    }
+
+    function setSelectedType(type) {
+      state.selectedType = type;
+      [...els.markerGrid.querySelectorAll(".marker-option")].forEach(button => {
+        button.classList.toggle("selected", button.dataset.type === type);
+      });
+    }
+
+    function clearPendingPhoto() {
+      state.pendingPhoto = "";
+      els.photoInput.value = "";
+      els.photoPreview.classList.remove("visible");
+      els.photoPreviewImage.removeAttribute("src");
+      els.photoPreviewText.textContent = "Photo ready to save with this find.";
+    }
+
+    function readFileAsDataUrl(file) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = () => reject(reader.error || new Error("Photo could not be read."));
+        reader.readAsDataURL(file);
+      });
+    }
+
+    function loadImage(dataUrl) {
+      return new Promise((resolve, reject) => {
+        const image = new Image();
+        image.onload = () => resolve(image);
+        image.onerror = () => reject(new Error("Photo could not be loaded."));
+        image.src = dataUrl;
+      });
+    }
+
+    async function compressPhoto(dataUrl) {
+      const image = await loadImage(dataUrl);
+      const scale = Math.min(1, 800 / image.width);
+      const width = Math.max(1, Math.round(image.width * scale));
+      const height = Math.max(1, Math.round(image.height * scale));
+      const canvas = document.createElement("canvas");
+      canvas.width = width;
+      canvas.height = height;
+      const context = canvas.getContext("2d");
+      context.drawImage(image, 0, 0, width, height);
+      return canvas.toDataURL("image/jpeg", 0.7);
+    }
+
+    async function handlePhotoSelection() {
+      const file = els.photoInput.files && els.photoInput.files[0];
+      if (!file) return;
+      if (!file.type.startsWith("image/")) {
+        showStatus("Choose an image file for the marker photo.");
+        clearPendingPhoto();
+        return;
+      }
+
+      els.photoPreviewText.textContent = "Preparing photo...";
+      els.photoPreview.classList.add("visible");
+      els.saveBtn.disabled = true;
+      try {
+        const previewDataUrl = await readFileAsDataUrl(file);
+        els.photoPreviewImage.src = previewDataUrl;
+        els.photoPreviewText.textContent = "Compressing photo...";
+        const compressed = await compressPhoto(previewDataUrl);
+        state.pendingPhoto = compressed;
+        els.photoPreviewImage.src = compressed;
+        els.photoPreviewText.textContent = "Photo ready to save with this find.";
+        showStatus("Photo added and compressed.");
+      } catch (error) {
+        clearPendingPhoto();
+        showStatus("Photo could not be added. Try another image.");
+      } finally {
+        els.saveBtn.disabled = !state.permissions.canWriteSpottings;
+      }
+    }
+
+    function openDrawer(latlng, force = false) {
+      if (!force && Date.now() < state.ignoreMapClicksUntil) return;
+      if (!state.permissions.canWriteSpottings) {
+        showStatus("You can view this Trail Log, but cannot add sightings.", true);
+        return;
+      }
+      guardMapTap();
+      state.pendingLatLng = latlng;
+      els.noteInput.value = "";
+      clearPendingPhoto();
+      els.coordText.textContent = `Location: ${latlng.lat.toFixed(5)}, ${latlng.lng.toFixed(5)}`;
+      els.drawer.classList.add("open");
+      els.drawerScrim.classList.add("open");
+      closePanels();
+      setNavActive(null);
+      invalidateMapLayout();
+      setTimeout(() => els.noteInput.focus({ preventScroll: true }), 240);
+    }
+
+    function closeDrawer() {
+      guardMapTap();
+      els.drawer.classList.remove("open");
+      els.drawerScrim.classList.remove("open");
+      state.pendingLatLng = null;
+      setNavActive("map");
+      invalidateMapLayout();
+    }
+
+    async function savePendingMarker() {
+      if (!state.pendingLatLng) return;
+      if (!state.permissions.canWriteSpottings) {
+        showStatus("You do not have permission to save sightings.", true);
+        return;
+      }
+      guardMapTap();
+      const marker = await TrailItData.createSightingMarker({
+        type: state.selectedType,
+        note: state.permissions.canAddNotes ? els.noteInput.value.trim() : "",
+        lat: state.pendingLatLng.lat,
+        lng: state.pendingLatLng.lng,
+        photo: state.permissions.canAddNotes ? state.pendingPhoto : ""
+      });
+      if (!marker) {
+        showStatus("You do not have permission to save sightings.", true);
+        return;
+      }
+
+      state.markers.push(marker);
+      addMarkerLayer(marker);
+      renderRecent();
+      closeDrawer();
+      showStatus(TrailItData.mode === "supabase" ? `${marker.type} saved to Supabase.` : `${marker.type} saved to this device.`);
+    }
+
+    async function deleteMarker(id) {
+      if (!await TrailItData.deleteSightingMarker(id)) {
+        showStatus("You do not have permission to delete that marker.", true);
+        return;
+      }
+      state.markers = state.markers.filter(marker => marker.id !== id);
+      const layer = state.markerLayers.get(id);
+      if (layer) layer.remove();
+      state.markerLayers.delete(id);
+      renderRecent();
+      showStatus("Marker deleted.");
+    }
+
+    function focusMarker(id) {
+      const marker = state.markers.find(item => item.id === id);
+      const layer = state.markerLayers.get(id);
+      if (!marker || !layer) return;
+      map.setView([marker.lat, marker.lng], Math.max(map.getZoom(), 16), { animate: true });
+      layer.openPopup();
+      els.recentPanel.classList.remove("open");
+      setNavActive("map");
+      invalidateMapLayout();
+    }
+
+    function setNavActive(active) {
+      els.mapBtn.classList.toggle("active", active === "map");
+      els.recentBtn.classList.toggle("active", active === "recent");
+      els.trailsBtn.classList.toggle("active", active === "trails");
+      els.addHereBtn.classList.toggle("active", active === "add");
+    }
+
+    function addAtCurrentPosition() {
+      if (!state.permissions.canWriteSpottings) {
+        showStatus("You can view this Trail Log, but cannot add sightings.", true);
+        return;
+      }
+      guardMapTap();
+      const center = state.userLatLng || map.getCenter();
+      openDrawer(L.latLng(center.lat, center.lng), true);
+      setNavActive("add");
+    }
+
+    function centerOnUser() {
+      if (!navigator.geolocation) {
+        showStatus("GPS is not available in this browser.", true);
+        return;
+      }
+
+      showStatus("Finding your current GPS position...", true);
+      navigator.geolocation.getCurrentPosition(position => {
+        const lat = position.coords.latitude;
+        const lng = position.coords.longitude;
+        state.userLatLng = L.latLng(lat, lng);
+        map.setView([lat, lng], 16);
+        showStatus("Centered on your GPS position.");
+      }, error => {
+        const messages = {
+          1: "GPS permission denied. You can still tap the map to add finds.",
+          2: "GPS position is unavailable right now.",
+          3: "GPS request timed out. Try the recenter button again."
+        };
+        showStatus(messages[error.code] || "GPS could not find your position.", true);
+      }, {
+        enableHighAccuracy: true,
+        maximumAge: 8000,
+        timeout: 16000
+      });
+    }
+
+    function handleTrailCoordinate(position) {
+      if (!state.activeTrail) return;
+      const nextCoordinate = toRouteCoordinate(position);
+      const route = state.activeTrail.routeCoordinates;
+      const lastCoordinate = route[route.length - 1];
+      const extraMeters = lastCoordinate ? distanceMeters(lastCoordinate, nextCoordinate) : 0;
+      if (!lastCoordinate || extraMeters >= 1.5) {
+        route.push(nextCoordinate);
+        state.activeTrail.distanceMeters += extraMeters;
+      }
+      updateLiveTrailStats();
+    }
+
+    function startTrail() {
+      if (!state.permissions.canWriteTrails) {
+        showStatus("You can view this Trail Log, but cannot record trails.", true);
+        return;
+      }
+      if (!navigator.geolocation) {
+        showStatus("GPS is not available in this browser.", true);
+        return;
+      }
+      guardMapTap();
+      closePanels();
+      state.pendingTrail = null;
+      state.lastStepAt = 0;
+      state.activeTrail = {
+        startTime: new Date().toISOString(),
+        distanceMeters: 0,
+        detectedSteps: 0,
+        routeCoordinates: []
+      };
+      els.trailActionBtn.textContent = "End Trail";
+      els.trailActionBtn.classList.add("recording");
+      els.trailLiveCard.classList.add("visible");
+      updateLiveTrailStats();
+      window.clearInterval(state.trailTimerId);
+      state.trailTimerId = window.setInterval(updateLiveTrailStats, 1000);
+      startLocationWatch(true);
+      showStatus("Trail started. Distance, steps and route are recording.", true);
+    }
+
+    function endTrail() {
+      if (!state.activeTrail) return;
+      guardMapTap();
+      const endTime = new Date().toISOString();
+      const durationSeconds = Math.max(0, Math.floor((Date.parse(endTime) - Date.parse(state.activeTrail.startTime)) / 1000));
+      const distanceMiles = state.activeTrail.distanceMeters / METERS_PER_MILE;
+      state.pendingTrail = {
+        distanceMiles: Number(distanceMiles.toFixed(4)),
+        steps: Math.max(state.activeTrail.detectedSteps, estimateSteps(state.activeTrail.distanceMeters)),
+        durationSeconds,
+        startTime: state.activeTrail.startTime,
+        endTime,
+        routeCoordinates: [...state.activeTrail.routeCoordinates]
+      };
+      state.activeTrail = null;
+      window.clearInterval(state.trailTimerId);
+      els.trailLiveCard.classList.remove("visible");
+      els.trailActionBtn.textContent = "Start Trail";
+      els.trailActionBtn.classList.remove("recording");
+      openSaveTrailModal();
+    }
+
+    function toggleTrail() {
+      if (state.activeTrail) {
+        endTrail();
+      } else {
+        startTrail();
+      }
+    }
+
+    function openSaveTrailModal() {
+      if (!state.pendingTrail) return;
+      els.trailNameInput.value = `Trail ${new Date().toLocaleDateString()}`;
+      els.saveDistance.textContent = state.pendingTrail.distanceMiles.toFixed(2);
+      els.saveSteps.textContent = state.pendingTrail.steps;
+      els.saveDuration.textContent = formatDuration(state.pendingTrail.durationSeconds);
+      els.saveRouteSummary.textContent = `${state.pendingTrail.routeCoordinates.length} route points saved for map drawing.`;
+      els.saveTrailModal.classList.add("open");
+      setTimeout(() => els.trailNameInput.focus({ preventScroll: true }), 80);
+    }
+
+    function closeSaveTrailModal() {
+      els.saveTrailModal.classList.remove("open");
+      state.pendingTrail = null;
+    }
+
+    async function saveTrail() {
+      if (!state.pendingTrail) return;
+      if (!state.permissions.canWriteTrails) {
+        showStatus("You do not have permission to save trails.", true);
+        return;
+      }
+      const name = els.trailNameInput.value.trim();
+      if (!name) {
+        showStatus("Name the trail before saving.", true);
+        return;
+      }
+
+      const trail = await TrailItData.createTrailRoute({
+        name,
+        date: state.pendingTrail.endTime,
+        distanceMiles: state.pendingTrail.distanceMiles,
+        steps: state.pendingTrail.steps,
+        durationSeconds: state.pendingTrail.durationSeconds,
+        startTime: state.pendingTrail.startTime,
+        endTime: state.pendingTrail.endTime,
+        routeCoordinates: state.pendingTrail.routeCoordinates
+      });
+      if (!trail) {
+        showStatus("You do not have permission to save trails.", true);
+        return;
+      }
+
+      state.savedTrails.unshift(trail);
+      renderTrails();
+      closeSaveTrailModal();
+      els.trailsPanel.classList.add("open");
+      setNavActive("trails");
+      showStatus(TrailItData.mode === "supabase" ? "Trail saved to Supabase." : "Trail saved to this device.");
+      invalidateMapLayout();
+    }
+
+    function discardTrail() {
+      closeSaveTrailModal();
+      showStatus("Trail discarded.");
+    }
+
+    function handleStepMotion(event) {
+      if (!state.activeTrail) return;
+      const acceleration = event.accelerationIncludingGravity;
+      if (!acceleration) return;
+      const magnitude = Math.sqrt(
+        (acceleration.x || 0) ** 2 +
+        (acceleration.y || 0) ** 2 +
+        (acceleration.z || 0) ** 2
+      );
+      const now = Date.now();
+      if (magnitude > 13.2 && now - state.lastStepAt > 340) {
+        state.lastStepAt = now;
+        state.activeTrail.detectedSteps += 1;
+        updateLiveTrailStats();
+      }
+    }
+
+    function startLocationWatch(centerWhenFound = false) {
+      if (!navigator.geolocation) {
+        showStatus("GPS is not available in this browser.", true);
+        return;
+      }
+
+      if (state.watchId !== null) return;
+
+      showStatus("Requesting GPS permission...", true);
+      state.watchId = navigator.geolocation.watchPosition(position => {
+        const latlng = L.latLng(position.coords.latitude, position.coords.longitude);
+        const accuracy = position.coords.accuracy || 0;
+        state.userLatLng = latlng;
+        handleTrailCoordinate(position);
+
+        if (!state.userLayer) {
+          state.userLayer = L.marker(latlng, { icon: makeUserIcon(), interactive: false }).addTo(map);
+        } else {
+          state.userLayer.setLatLng(latlng);
+        }
+
+        if (!state.accuracyLayer) {
+          state.accuracyLayer = L.circle(latlng, {
+            radius: accuracy,
+            color: "#7db7ff",
+            weight: 1,
+            opacity: 0.8,
+            fillColor: "#4da3ff",
+            fillOpacity: 0.14
+          }).addTo(map);
+        } else {
+          state.accuracyLayer.setLatLng(latlng);
+          state.accuracyLayer.setRadius(accuracy);
+        }
+
+        showStatus(`GPS locked. Accuracy about ${Math.round(accuracy)} m.`);
+        if (centerWhenFound || !startLocationWatch.hasCentered) {
+          map.setView(latlng, 16);
+          startLocationWatch.hasCentered = true;
+        }
+      }, error => {
+        map.setView(DEFAULT_CENTER, 6);
+        const messages = {
+          1: "GPS permission denied. You can still tap the map to add finds.",
+          2: "GPS position is unavailable right now.",
+          3: "GPS request timed out. Try the locate button again."
+        };
+        showStatus(messages[error.code] || "GPS could not be started.", true);
+      }, {
+        enableHighAccuracy: true,
+        maximumAge: 8000,
+        timeout: 16000
+      });
+    }
+
+    async function finishAppStart() {
+      if (state.appStarted) {
+        await TrailItData.initialize();
+        await renderUserSwitcher();
+        await renderTrailLogs();
+        await refreshActiveTrailLogData();
+        return;
+      }
+      state.appStarted = true;
+      buildTypeGrid();
+      await TrailItData.initialize();
+      renderDataModeSwitcher();
+      await renderUserSwitcher();
+      await renderTrailLogs();
+      await refreshActiveTrailLogData();
+      syncResponsiveLayout();
+      startLocationWatch();
+
+      window.addEventListener("load", () => {
+        invalidateMapLayout(500);
+        setTimeout(() => {
+          els.mapHint.style.display = "none";
+        }, 6200);
+      });
+    }
+
+    async function initializeApp() {
+      setAuthMode("login");
+      renderDataModeSwitcher();
+
+      if (!TrailItAuth.isSupabaseMode) {
+        await finishAppStart();
+        return;
+      }
+
+      try {
+        const user = await TrailItAuth.initialize(async nextUser => {
+          state.authUser = nextUser;
+          renderAuthState();
+          if (nextUser) await finishAppStart();
+        });
+        state.authUser = user;
+        renderAuthState();
+        if (user) await finishAppStart();
+      } catch (error) {
+        showAuthScreen(error.message || "Could not load Supabase session.");
+      }
+    }
+
+    map.on("click", event => {
+      if (Date.now() < state.ignoreMapClicksUntil) return;
+      if (els.drawer.classList.contains("open")) return;
+      const point = event.containerPoint;
+      const mapHeight = map.getSize().y;
+      if (point && point.y > mapHeight - 118) return;
+      openDrawer(event.latlng);
+    });
+
+    map.on("popupopen", event => {
+      const button = event.popup.getElement().querySelector("[data-delete-id]");
+      if (button) {
+        button.addEventListener("click", () => deleteMarker(button.dataset.deleteId));
+      }
+    });
+
+    els.markerGrid.addEventListener("click", event => {
+      const button = event.target.closest("[data-type]");
+      if (button) setSelectedType(button.dataset.type);
+    });
+
+    els.saveBtn.addEventListener("click", savePendingMarker);
+    els.photoBtn.addEventListener("click", () => {
+      guardMapTap();
+      els.photoInput.click();
+    });
+    els.photoInput.addEventListener("change", handlePhotoSelection);
+    els.cancelBtn.addEventListener("click", closeDrawer);
+    els.closeDrawerBtn.addEventListener("click", closeDrawer);
+    els.drawerScrim.addEventListener("click", closeDrawer);
+    els.locateBtn.addEventListener("click", centerOnUser);
+    els.trailActionBtn.addEventListener("click", toggleTrail);
+    els.trailLogsOpenBtn.addEventListener("click", openTrailLogScreen);
+    els.userSwitchSelect.addEventListener("change", event => switchUser(event.target.value));
+    els.logoutBtn.addEventListener("click", logout);
+    els.dataModeSelect.addEventListener("change", event => switchDataMode(event.target.value));
+    els.loginTabBtn.addEventListener("click", () => setAuthMode("login"));
+    els.signupTabBtn.addEventListener("click", () => setAuthMode("signup"));
+    els.authForm.addEventListener("submit", submitAuth);
+    els.authMockModeBtn.addEventListener("click", () => switchDataMode("mock"));
+    els.closeTrailLogScreenBtn.addEventListener("click", closeTrailLogScreen);
+    els.trailLogForm.addEventListener("submit", createTrailLog);
+    els.inviteUserBtn.addEventListener("click", inviteSelectedUser);
+    els.memberList.addEventListener("change", updateMemberPermission);
+    els.addHereBtn.addEventListener("click", addAtCurrentPosition);
+    els.saveTrailBtn.addEventListener("click", saveTrail);
+    els.discardTrailBtn.addEventListener("click", discardTrail);
+
+    els.mapBtn.addEventListener("click", () => {
+      closePanels();
+      setNavActive("map");
+      invalidateMapLayout();
+    });
+
+    els.recentBtn.addEventListener("click", () => {
+      const open = !els.recentPanel.classList.contains("open");
+      els.trailsPanel.classList.remove("open");
+      els.recentPanel.classList.toggle("open", open);
+      setNavActive(open ? "recent" : "map");
+      invalidateMapLayout();
+    });
+
+    els.trailsBtn.addEventListener("click", () => {
+      const open = !els.trailsPanel.classList.contains("open");
+      els.recentPanel.classList.remove("open");
+      els.trailsPanel.classList.toggle("open", open);
+      setNavActive(open ? "trails" : "map");
+      invalidateMapLayout();
+    });
+
+    els.recentList.addEventListener("click", event => {
+      const row = event.target.closest("[data-focus-id]");
+      if (row) focusMarker(row.dataset.focusId);
+    });
+
+    els.trailList.addEventListener("click", event => {
+      const row = event.target.closest("[data-trail-id]");
+      if (!row) return;
+      const trail = state.savedTrails.find(item => item.id === row.dataset.trailId);
+      if (trail) drawTrailRoute(trail);
+    });
+
+    els.trailLogList.addEventListener("click", event => {
+      const row = event.target.closest("[data-open-trail-log-id]");
+      if (row) openTrailLog(row.dataset.openTrailLogId);
+    });
+
+    window.addEventListener("devicemotion", handleStepMotion);
+
+    document.addEventListener("keydown", event => {
+      if (event.key === "Escape") {
+        closeDrawer();
+        closePanels();
+        els.saveTrailModal.classList.remove("open");
+        closeTrailLogScreen();
+        invalidateMapLayout();
+      }
+    });
+
+    initializeApp();
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,15 @@
+.env
+.env.*
+!.env.example
+
+# Netlify
+.netlify
+
+# Claude Code memory (local only)
+.claude
+
+# Test output
+test-results
+
+# Node (no build step currently, but ignore if added)
+node_modules
